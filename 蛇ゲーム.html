@@ -1,0 +1,1785 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>SLITHERIA - Ultimate Enhanced Edition</title>
+<style>
+  /* ──────────────────────────────────────────
+     画面全体・基本レイアウト
+     全要素の余白リセット／body を画面中央に配置
+     ────────────────────────────────────────── */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { 
+    background: #0c0f12; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh; 
+    overflow: hidden; 
+    font-family: 'Helvetica Neue', Arial, sans-serif; 
+    color: #fff; 
+    user-select: none; 
+  }
+  canvas { display: block; cursor: default; }
+  
+  /* ──────────────────────────────────────────
+     プレイ中の画面UI
+     左上に「現在の点数」「ヘビの長さ」を表示するパネル
+     ────────────────────────────────────────── */
+  #ui {
+    position: fixed; top: 20px; left: 20px;
+    background: rgba(5, 7, 12, 0.75); padding: 14px 22px;
+    border-radius: 12px; pointer-events: none; z-index: 5;
+    border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  /* UIのラベル文字（小さいグレー） */
+  #ui div { margin-bottom: 2px; color: #8a99ad; font-size: 12px; font-weight: bold; letter-spacing: 0.5px; }
+  /* UIの数値表示（大きいシアン） */
+  #ui span.val { font-size: 28px; font-weight: 900; color: #00ffcc; font-feature-settings: "tnum"; text-shadow: 0 0 10px rgba(0,255,200,0.3); }
+  
+  /* ──────────────────────────────────────────
+     突発カオスイベントの警告帯
+     画面上部中央に赤いバナーでイベント名を点滅表示
+     ────────────────────────────────────────── */
+  #event-alert {
+    position: fixed; top: 120px; left: 50%; transform: translateX(-50%);
+    background: rgba(255, 71, 87, 0.9); color: #fff; padding: 12px 30px;
+    border-radius: 30px; font-weight: 900; font-size: 18px; letter-spacing: 1px;
+    z-index: 8; display: none; box-shadow: 0 0 20px rgba(255, 71, 87, 0.6);
+    border: 2px solid #fff; animation: blink 1s infinite alternate;
+  }
+  /* 警告帯の点滅アニメーション */
+  @keyframes blink { 0% { opacity: 0.8; } 100% { opacity: 1; transform: translateX(-50%) scale(1.05); } }
+
+  /* ──────────────────────────────────────────
+     キルログ表示エリア
+     左上に「〇〇 が △△ を仕留めた！」と流れる履歴
+     ────────────────────────────────────────── */
+  #kill-log {
+    position: fixed; top: 180px; left: 20px; z-index: 6;
+    display: flex; flex-direction: column; gap: 6px; pointer-events: none;
+  }
+  /* 1件分のキルログアイテム（3.5秒後にフェードアウト） */
+  .log-item {
+    background: rgba(255, 71, 87, 0.2); border-left: 4px solid #ff4757;
+    color: #fff; padding: 6px 14px; border-radius: 0 8px 8px 0;
+    font-size: 12px; font-weight: bold; backdrop-filter: blur(4px);
+    animation: fadeOutLog 3.5s forwards; min-width: 200px;
+  }
+  @keyframes fadeOutLog { 0% { opacity: 1; transform: translateX(0); } 80% { opacity: 1; transform: translateX(0); } 100% { opacity: 0; transform: translateX(-20px); } }
+
+  /* ──────────────────────────────────────────
+     右上のリアルタイム順位表（リーダーボード）
+     上位5名のスコアをリアルタイムで更新して表示
+     ────────────────────────────────────────── */
+  #leaderboard {
+    position: absolute; top: 20px; right: 20px; background: rgba(5, 7, 12, 0.75);
+    color: #ccc; padding: 14px; border-radius: 12px; font-size: 13px; min-width: 220px;
+    border: 1px solid rgba(255,255,255,0.08); pointer-events: none; z-index: 5; backdrop-filter: blur(8px);
+  }
+  /* 「順位表 上位5名」のタイトル行 */
+  #leaderboard .title {
+    font-weight: 800; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 6px; margin-bottom: 8px; display: flex; justify-content: space-between;
+  }
+  #leaderboard .title span { color: #00ffcc; }
+
+  /* ──────────────────────────────────────────
+     タイトル画面・ロビー（オーバーレイ全体）
+     ゲーム開始前・ゲームオーバー後に画面全体を覆うパネル
+     ────────────────────────────────────────── */
+  #overlay {
+    position: fixed; inset: 0;
+    background: radial-gradient(circle at center, rgba(12, 17, 28, 0.96) 0%, rgba(5, 6, 10, 0.99) 100%);
+    display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px;
+    z-index: 10; transition: opacity 0.3s ease, visibility 0.3s ease;
+    overflow-y: auto; padding: 20px;
+  }
+  /* ゲーム開始時にオーバーレイを非表示にするクラス */
+  #overlay.hidden { opacity: 0; visibility: hidden; }
+  
+  /* タイトルロゴ「SLITHERIA」のグラデーション文字 */
+  #overlay h1 {
+    font-size: 70px; font-weight: 900; letter-spacing: -1px;
+    background: linear-gradient(135deg, #00ffcc 0%, #0077ff 50%, #ff007f 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+   background-clip: text;
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+    margin-bottom: 2px; filter: drop-shadow(0 4px 20px rgba(0,255,200,0.4));
+  }
+  /* 操作説明文 */
+  #overlay p { font-size: 13px; color: #7f8c9d; max-width: 500px; text-align: center; line-height: 1.5; }
+  
+  /* ゲームオーバー時に点数を大きく表示するエリア */
+  .result { font-size: 32px; color: #f1c40f; display: none; font-weight: 900; margin: 5px 0; text-shadow: 0 0 15px rgba(241,196,15,0.3); font-family: 'Arial Black', sans-serif; }
+
+  /* ──────────────────────────────────────────
+     タイトル画面のボタン群
+     スタートボタン・タイトルに戻るボタンのスタイル
+     ────────────────────────────────────────── */
+  .btn-group { display: flex; gap: 15px; margin-top: 5px; }
+  #overlay button { padding: 14px 45px; font-size: 16px; color: #fff; border: none; border-radius: 25px; cursor: pointer; font-weight: 700; transition: all 0.2s ease; }
+  /* スタートボタン（緑グラデーション） */
+  #btn-play { background: linear-gradient(135deg, #2ed573, #10ac84); box-shadow: 0 4px 15px rgba(46, 213, 115, 0.4); }
+  #btn-play:hover { transform: scale(1.04); box-shadow: 0 6px 20px rgba(46, 213, 115, 0.6); }
+  /* タイトルに戻るボタン（グレー、ゲームオーバー時のみ表示） */
+  #btn-menu { background: #4b6584; display: none; }
+  #btn-menu:hover { background: #3b526d; transform: scale(1.04); }
+  #overlay button:active { transform: scale(0.96); }
+  
+  /* ──────────────────────────────────────────
+     タイトル画面の設定セレクター共通スタイル
+     カオスモード・スキン・アクセサリー選択エリアの枠
+     ────────────────────────────────────────── */
+  .selector-section { text-align: center; margin: 4px 0; width: 100%; max-width: 600px; }
+  .selector-section label { display: block; color: #a4b0be; font-size: 13px; margin-bottom: 8px; font-weight: bold; }
+  .selector-grid { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
+  /* 各選択肢の丸いボタン（スキン・アクセサリー用） */
+  .opt-circle { width: 44px; height: 44px; border-radius: 50%; cursor: pointer; transition: all 0.2s ease; display: flex; justify-content: center; align-items: center; border: 3px solid transparent; font-size: 20px; background: rgba(255,255,255,0.05); overflow: hidden; }
+  /* 選択中の丸ボタン（シアン枠＋拡大） */
+  .opt-circle.active { border-color: #00ffcc; transform: scale(1.15); box-shadow: 0 0 15px rgba(0,255,200,0.6); background: rgba(255,255,255,0.1); }
+  .opt-circle:hover:not(.active) { transform: translateY(-2px); background: rgba(255,255,255,0.1); }
+
+  /* カオスモードのON/OFFトグルボタン */
+  .toggle-btn { background: #333; border: 1px solid rgba(255,255,255,0.1); color: #ccc; padding: 10px 24px !important; font-size: 14px !important; border-radius: 20px !important; font-weight: bold; }
+  .toggle-btn.active { background: linear-gradient(135deg, #ff4757, #ff6b81) !important; color: white !important; box-shadow: 0 0 15px rgba(255, 71, 87, 0.4); border-color: transparent; }
+
+  /* ──────────────────────────────────────────
+     隠し管理者デバッグメニュー
+     Cキー＋暗号コードで開く秘密のチートメニュー
+     ────────────────────────────────────────── */
+  #cheat-menu {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(8, 10, 15, 0.98); border: 2px solid #ff9f43; padding: 25px; border-radius: 16px;
+    display: none; flex-direction: column; gap: 8px; min-width: 340px; z-index: 100; box-shadow: 0 0 50px rgba(255, 159, 67, 0.4);
+    backdrop-filter: blur(10px);
+  }
+  #cheat-menu h3 { color: #ff9f43; text-align: center; border-bottom: 1px solid #333; padding-bottom: 8px; font-weight: 900; }
+  /* チートメニュー内の各ボタン（左：機能名、右：ON/OFFバッジ） */
+  #cheat-menu button {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    color: white; padding: 11px 14px; border-radius: 8px; cursor: pointer; text-align: left; font-size: 13px;
+    display: flex; justify-content: space-between; align-items: center; transition: 0.2s;
+  }
+  #cheat-menu button:hover { background: rgba(255,255,255,0.1); border-color: #ff9f43; }
+  /* ON/OFFバッジのスタイル */
+  #cheat-menu button span.status { font-weight: bold; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+  #cheat-menu button span.status.off { background: #555; color: #ccc; }
+  #cheat-menu button span.status.on { background: #2ed573; color: #fff; box-shadow: 0 0 8px #2ed573; }
+  /* チートメニューを閉じる赤いボタン */
+  #cheat-menu .close-btn { background: #ff3e3e; justify-content: center; border: none; margin-top: 5px; font-weight: bold; width: 100%; padding: 12px; border-radius: 8px; color: white; cursor: pointer; }
+  #cheat-menu .close-btn:hover { background: #e03030; }
+
+  /* レインボースキン用：色が回転し続けるアニメーション */
+  @keyframes rainbowShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+</style>
+</head>
+<body>
+
+<!-- ──────────────────────────────────────────
+     プレイ中UI：左上のスコア・長さ表示パネル
+     ────────────────────────────────────────── -->
+<div id="ui">
+  <div>現在の点数</div><span class="val" id="score">0</span>
+  <div style="margin-top:8px;">ヘビの長さ</div><span class="val" id="length">15</span>
+</div>
+
+<!-- カオスイベント発生時に画面上部に表示される警告バナー -->
+<div id="event-alert"></div>
+
+<!-- キルログ：誰かが倒されるたびに左上に流れるメッセージ -->
+<div id="kill-log"></div>
+
+<!-- 右上の順位表：上位5名をリアルタイム更新 -->
+<div id="leaderboard">
+  <div class="title">順位表 <span>上位5名</span></div>
+  <div id="leaderboard-list"></div>
+</div>
+
+<!-- ゲーム本体のcanvas（ここにすべての描画が行われる） -->
+<canvas id="c"></canvas>
+
+<!-- ──────────────────────────────────────────
+     タイトル画面・ゲームオーバー画面のオーバーレイ
+     ゲーム開始前と終了後にこの画面が表示される
+     ────────────────────────────────────────── -->
+<div id="overlay">
+  <!-- タイトルロゴ／ゲームオーバー時は「ゲームオーバー」に変わる -->
+  <h1 id="ot">SLITHERIA</h1>
+  <!-- 操作説明文／ゲームオーバー時はリザルトメッセージに変わる -->
+  <p id="om">マウス or WASD/矢印キーで操作 / クリックでブースト<br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span></p>
+  
+  <!-- ゲームオーバー時のスコア結果表示（通常は非表示） -->
+  <div class="result" id="result"></div>
+  
+  <!-- カオスモードのON/OFFトグルボタン -->
+  <div class="selector-section" id="chaos-area">
+    <label>🌪️ 予測不能なカオスモード現象設定：</label>
+    <div class="selector-grid">
+      <button id="btn-chaos" class="toggle-btn" onclick="toggleChaosMode()">カオス現象：OFF</button>
+    </div>
+  </div>
+
+  <!-- スキン（ヘビの色）選択：12種類の丸いボタン -->
+  <div class="selector-section" id="skin-area">
+    <label>🎨 スキン（カラーバリエーション）を選ぶ：</label>
+    <div class="selector-grid">
+      <div class="opt-circle active" onclick="selectSkin(0)" style="background: radial-gradient(circle, #ff4757, #ff6b81);" title="ルビーレッド"></div>
+      <div class="opt-circle" onclick="selectSkin(1)" style="background: radial-gradient(circle, #1e90ff, #3742fa);" title="サファイアブルー"></div>
+      <div class="opt-circle" onclick="selectSkin(2)" style="background: linear-gradient(135deg, #ff9f43, #ee5253, #1e90ff, #2ed573); background-size: 300% 300%; animation: rainbowShift 3s infinite linear;" title="レインボー虹"></div>
+      <div class="opt-circle" onclick="selectSkin(3)" style="background: radial-gradient(circle, #ff9f43, #ffa502);" title="サンセットオレンジ"></div>
+      <div class="opt-circle" onclick="selectSkin(4)" style="background: radial-gradient(circle, #0be881, #05c46b);" title="エメラルドグリーン"></div>
+      <div class="opt-circle" onclick="selectSkin(5)" style="background: radial-gradient(circle, #ef57ff, #b800cc);" title="アメジストパープル"></div>
+      <div class="opt-circle" onclick="selectSkin(6)" style="background: radial-gradient(circle, #fbc531, #e1b12c);" title="トパーズゴールド"></div>
+      <div class="opt-circle" onclick="selectSkin(7)" style="background: radial-gradient(circle, #353b48, #2f3640);" title="ダークシャドウ"></div>
+      <div class="opt-circle" onclick="selectSkin(8)" style="background: radial-gradient(circle, #01a3a4, #00d2d3);" title="ターコイズシアン"></div>
+      <div class="opt-circle" onclick="selectSkin(9)" style="background: radial-gradient(circle, #ff9ff3, #feca57);" title="パステルキャンディ"></div>
+      <div class="opt-circle" onclick="selectSkin(10)" style="background: repeating-linear-gradient(45deg, #ff4d4d, #ff4d4d 5px, #fff 5px, #fff 10px);" title="ストライプゼブラ"></div>
+      <div class="opt-circle" onclick="selectSkin(11)" style="background: radial-gradient(circle, #ffffff, #dcdde1);" title="プラチナホワイト"></div>
+    </div>
+  </div>
+
+  <!-- アクセサリー（頭の装飾品）選択：なし＋5種類 -->
+  <div class="selector-section" id="accessory-area">
+    <label>👑 装備（頭の装飾品）を選択</label>
+    <div class="selector-grid" id="acc-selector">
+      <div class="opt-circle active" onclick="selectAcc(0)">❌</div>
+      <div class="opt-circle" onclick="selectAcc(1)"  title="王冠">👑</div>
+      <div class="opt-circle" onclick="selectAcc(2)"  title="魔女の帽子">🎩</div>
+      <div class="opt-circle" onclick="selectAcc(3)"  title="天使の輪">😇</div>
+      <div class="opt-circle" onclick="selectAcc(4)"  title="猫耳">🐱</div>
+      <div class="opt-circle" onclick="selectAcc(5)"  title="リボン">🎀</div>
+      <div class="opt-circle" onclick="selectAcc(6)"  title="サンタ帽">🎅</div>
+      <div class="opt-circle" onclick="selectAcc(7)"  title="卒業帽">🎓</div>
+      <div class="opt-circle" onclick="selectAcc(8)"  title="カウボーイハット">🤠</div>
+      <div class="opt-circle" onclick="selectAcc(9)"  title="悪魔の角">😈</div>
+      <div class="opt-circle" onclick="selectAcc(10)" title="炎オーラ">🔥</div>
+      <div class="opt-circle" onclick="selectAcc(11)" title="星">⭐</div>
+      <div class="opt-circle" onclick="selectAcc(12)" title="ドクロ">💀</div>
+      <div class="opt-circle" onclick="selectAcc(13)" title="うさ耳">🐰</div>
+      <div class="opt-circle" onclick="selectAcc(14)" title="キツネ耳">🦊</div>
+      <div class="opt-circle" onclick="selectAcc(15)" title="宇宙人">👽</div>
+    </div>
+  </div>
+
+  <!-- スタートボタン・タイトルに戻るボタン -->
+  <div class="btn-group">
+    <button id="btn-play">スタート</button>
+    <button id="btn-menu">タイトルに戻る</button>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────
+     隠し管理者チートメニュー
+     タイトル画面でCキー→暗号コード入力で開く
+     ────────────────────────────────────────── -->
+<div id="cheat-menu">
+  <h3>🛠️ 管理者シークレットメニュー</h3>
+  <button onclick="cheatToggleAutoScore()"><span>🟢 オート巨大化モード</span><span class="status off" id="st-score">OFF</span></button>
+  <button onclick="cheatToggleGod()"><span>🟡 無敵モード</span><span class="status off" id="st-god">OFF</span></button>
+  <button onclick="cheatToggleMagnet()"><span>🧲 超広範囲エサ磁石</span><span class="status off" id="st-mag">OFF</span></button>
+  <button onclick="cheatToggleMegaFood()"><span>🍎 メガエサモード</span><span class="status off" id="st-mega">OFF</span></button>
+  <button onclick="cheatToggleInfiniteBoost()"><span>⚡ 無制限ブースト</span><span class="status off" id="st-inf">OFF</span></button>
+  <button onclick="cheatToggleMiniEnemies()"><span>🔍 敵AIミニマム化</span><span class="status off" id="st-mini">OFF</span></button>
+  <button onclick="cheatToggleShootMode()"><span>🔵 エサ消費ショットモード（Qキー）</span><span class="status off" id="st-shoot">OFF</span></button>
+  <button class="close-btn" onclick="closeCheatMenu()">メニューを閉じる</button>
+</div>
+
+<script>
+"use strict";
+
+// ──────────────────────────────────────────
+// canvas・描画コンテキストの取得と画面サイズの初期化
+// ──────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = window.innerWidth;
+let H = canvas.height = window.innerHeight;
+
+// ウィンドウサイズが変わったら canvas サイズも追従させる
+window.addEventListener('resize', () => {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+});
+
+// ──────────────────────────────────────────
+// UI要素の参照取得（頻繁に操作する DOM をまとめて変数に保持）
+// ──────────────────────────────────────────
+const scoreEl = document.getElementById('score');
+const lenEl   = document.getElementById('length');
+const overlay = document.getElementById('overlay');
+const ot      = document.getElementById('ot');
+const om      = document.getElementById('om');
+const result  = document.getElementById('result');
+const btnPlay = document.getElementById('btn-play');
+const btnMenu = document.getElementById('btn-menu');
+const eventAlertEl = document.getElementById('event-alert');
+const killLogContainer = document.getElementById('kill-log');
+
+// ──────────────────────────────────────────
+// ゲーム定数：ワールドサイズ・食べ物・敵の数
+// ──────────────────────────────────────────
+const WORLD_W = 3800, WORLD_H = 3800; // ステージの広さ（プレイエリア全体）
+const FOOD_COUNT = 250;  // 常に維持するエサの最低数
+const MAX_FOOD = 400;    // エサの上限数（超えたら追加しない）
+const AI_COUNT = 25;     // 同時に存在する敵AIの数
+
+// ──────────────────────────────────────────
+// 敵AIのランダム名前リスト（54種類）
+// ──────────────────────────────────────────
+const ENEMY_NAMES = [
+  'Whisper_DX','のらへび','Mr_誤作動',
+  'スネーク王', 'ネオン・バイパー', 'スピード魔人', 'シャドウ', 'ワームX', 'コブラダッシュ', 'レジェンド',
+  'デスストーカー', '神速のオロチ', 'ツチノコ先輩', 'アナコンダ大帝', 'ブラックマンバ', '毒霧のナーガ', 'ヘルヘビ', 
+  '暴走ミミズ', '一撃離脱', 'ハイパーウイング', 'エサ泥棒', '裏切りのヌシ', 
+  '貪欲な這い虫', 'クレイジーワーム', '光速のシマヘビ', 'お掃除ボット', 'Apex_Predator', 'NeonLight', 
+  'Snake_Eye',  'Shadow_Stalker', 'GhostWorm', 'Sniper_Snake', 'Venom_Strike', 'Toxic_Fangs', 
+  '龍神丸', '無限の胃袋', '絶対王者', 'ファントム', 'ピクセルドラゴン', '妖怪ひも男', 
+  'インビジブル', 'バジリスク',  'ヤマタノオロチ','ウロボロス', 'リバイアサン','ムフェトジーヴァ',
+  
+];
+
+// ──────────────────────────────────────────
+// チートフラグ：各チート機能のON/OFF状態を保持する変数
+// ──────────────────────────────────────────
+let isAutoScore = false;      // オート巨大化（毎フレームスコア自動加算）
+let isGodMode = false;        // 無敵（壁・敵胴体に当たっても死なない）
+let isMagnetMode = false;     // 磁石（周囲のエサが自動的に近づく）
+let isMegaFoodMode = false;   // メガエサ（エサが大きくなる）
+let isInfiniteBoost = false;  // 無制限ブースト（ブースト中に縮まない）
+let isMiniEnemies = false;    // 敵ミニマム化（敵の当たり判定が小さくなる）
+let isShootMode = false;      // ショットモード（Qキーで弾を撃てる）
+
+// ──────────────────────────────────────────
+// カオスイベント管理変数
+// ──────────────────────────────────────────
+let isChaosModeGlobal = false; // タイトル画面でカオスモードをONにしたか
+let currentEvent = 'none';     // 現在発生中のイベント名（'reverse' / 'storm' / 'none'）
+let eventTimer = 0;            // 現在のイベントの残り時間（フレーム数）
+let nextEventTimer = 200;      // 次のイベントが起きるまでの待機フレーム数
+
+// ──────────────────────────────────────────
+// ゲームオブジェクトと状態管理の変数
+// ──────────────────────────────────────────
+let player, foods, enemies, bullets;
+let running = false; // ゲームが動いているかどうか
+let animId;          // requestAnimationFrame のID（停止するときに使う）
+let mouse = { x: W / 2, y: H / 2 }; // マウスのスクリーン座標
+let cam = { x: WORLD_W / 2, y: WORLD_H / 2 }; // カメラのワールド座標（プレイヤーを追う）
+let boosting = false; // マウスクリック中のブースト状態
+const keys = {};      // 押されているキーの管理オブジェクト
+
+// プレイヤーが選んだスキン・アクセサリーの番号
+let playerSelectedSkinIndex = 0;
+let playerSelectedAccIndex = 0;
+
+// ──────────────────────────────────────────
+// キルログ：倒した・倒された情報を画面左上に表示する関数
+// ──────────────────────────────────────────
+function addKillLog(killerName, victimName) {
+  const item = document.createElement('div');
+  item.className = 'log-item';
+  // プレイヤーが関与したキルは目立つシアン色で表示
+  if (killerName === '👑 あなた' || killerName === 'あなた(弾) 🎯' || victimName === 'あなた') {
+    item.style.background = 'rgba(0, 255, 204, 0.2)';
+    item.style.borderLeft = '4px solid #00ffcc';
+  }
+  item.textContent = `⚔️ ${killerName} が ${victimName} を仕留めた！`;
+  killLogContainer.appendChild(item);
+  
+  // 3.5秒後にDOMから自動削除（CSSアニメーションと連動）
+  setTimeout(() => { item.remove(); }, 3500);
+}
+
+// ──────────────────────────────────────────
+// キーボード・マウス入力の受け取り処理
+// ──────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space') e.preventDefault(); // スペースキーでページがスクロールしないようにする
+
+  // Pキー：ゲーム中にタイトルへ即帰還
+  if (e.code === 'KeyP' && running) backToTitleDirectly(); 
+  
+  // Qキー：ショットモードがONのときだけ弾を発射
+  if (e.code === 'KeyQ' && running && isShootMode && player && player.alive) {
+    firePlayerBullet();
+  }
+
+  // Cキー：タイトル画面でのみ管理者メニューを開く（暗号コード入力が必要）
+  if (e.code === 'KeyC' && !running) { 
+    if (document.getElementById('cheat-menu').style.display !== 'flex') {
+      const pw = prompt("暗号コードを入力してください:");
+      if (pw === 'code') document.getElementById('cheat-menu').style.display = 'flex';
+    }
+  }
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+// マウスクリックでブーストON、離したらOFF
+canvas.addEventListener('mousedown', () => { boosting = true; });
+canvas.addEventListener('mouseup',   () => { boosting = false; });
+
+// ──────────────────────────────────────────
+// プレイヤーの弾発射処理（ショットモード専用）
+// ヘビの長さが15以上かつスコアが20以上のときのみ発射可能
+// 発射するとスコアが20減り、ヘビが1マス縮む
+// ──────────────────────────────────────────
+function firePlayerBullet() {
+  if (player.segs.length > 15 && player.score >= 20) {
+    player.score -= 20; // 弾のコストとしてスコアを消費
+    player.segs.pop();  // ヘビを1マス縮める
+    
+    const hx = player.segs[0].x;
+    const hy = player.segs[0].y;
+    
+    // 頭の向いている方向に弾を生成
+    bullets.push({
+      x: hx + Math.cos(player.angle) * (player.radius + 10),
+      y: hy + Math.sin(player.angle) * (player.radius + 10),
+      vx: Math.cos(player.angle) * 8.5, // X方向の速度
+      vy: Math.sin(player.angle) * 8.5, // Y方向の速度
+      radius: 8,
+      life: 140 // 弾の寿命（フレーム数）、0になると消える
+    });
+  }
+}
+
+// ──────────────────────────────────────────
+// カオスモードのトグル：タイトル画面のボタンから呼ばれる
+// ──────────────────────────────────────────
+function toggleChaosMode() {
+  isChaosModeGlobal = !isChaosModeGlobal;
+  const btn = document.getElementById('btn-chaos');
+  if (isChaosModeGlobal) {
+    btn.textContent = 'カオス現象：ON 🌪️';
+    btn.classList.add('active');
+  } else {
+    btn.textContent = 'カオス現象：OFF';
+    btn.classList.remove('active');
+  }
+}
+
+// ──────────────────────────────────────────
+// タイトル画面へ即帰還（Pキーまたは内部から呼ばれる）
+// ループを止めてオーバーレイを再表示し、UIをリセットする
+// ──────────────────────────────────────────
+function backToTitleDirectly() {
+  running = false;
+  currentEvent = 'none';
+  eventAlertEl.style.display = 'none';
+  cancelAnimationFrame(animId); // アニメーションループを停止
+  ot.textContent = 'SLITHERIA';
+  om.innerHTML = 'マウス or WASD/矢印キーで操作 / クリックでブースト<br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span>';
+  result.style.display = 'none';
+  btnPlay.textContent = 'スタート';
+  btnMenu.style.display = 'none';
+  // 設定セレクターを再表示
+  document.getElementById('chaos-area').style.display = 'block';
+  document.getElementById('skin-area').style.display = 'block';
+  document.getElementById('accessory-area').style.display = 'block';
+  overlay.classList.remove('hidden');
+  document.getElementById('cheat-menu').style.display = 'none';
+  killLogContainer.innerHTML = ''; // キルログをクリア
+}
+
+// ──────────────────────────────────────────
+// チートメニューのUI更新ヘルパー
+// 指定したバッジ要素のテキストと色をON/OFFに応じて切り替える
+// ──────────────────────────────────────────
+function updateCheatUI(id, flag) {
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.textContent = flag ? "ON" : "OFF";
+  el.className = flag ? "status on" : "status off";
+}
+
+// ──────────────────────────────────────────
+// チートメニューの各トグル関数
+// ──────────────────────────────────────────
+function closeCheatMenu() { document.getElementById('cheat-menu').style.display = 'none'; }
+function cheatToggleAutoScore() { isAutoScore = !isAutoScore; updateCheatUI('st-score', isAutoScore); }
+function cheatToggleGod() { isGodMode = !isGodMode; updateCheatUI('st-god', isGodMode); }
+function cheatToggleMagnet() { isMagnetMode = !isMagnetMode; updateCheatUI('st-mag', isMagnetMode); }
+function cheatToggleMegaFood() {
+  isMegaFoodMode = !isMegaFoodMode;
+  updateCheatUI('st-mega', isMegaFoodMode);
+  // すでにフィールドにあるエサのサイズも即座に切り替える
+  if(foods) foods.forEach(f => { f.radius = isMegaFoodMode ? rand(15, 25) : rand(3.5, 7.5); });
+}
+function cheatToggleInfiniteBoost() { isInfiniteBoost = !isInfiniteBoost; updateCheatUI('st-inf', isInfiniteBoost); }
+function cheatToggleMiniEnemies() { isMiniEnemies = !isMiniEnemies; updateCheatUI('st-mini', isMiniEnemies); }
+function cheatToggleShootMode() { isShootMode = !isShootMode; updateCheatUI('st-shoot', isShootMode); }
+
+// ──────────────────────────────────────────
+// 汎用ユーティリティ関数
+// ──────────────────────────────────────────
+
+// ==========================================
+// 高速化：六角形グリッド頂点オフセットの事前計算キャッシュ
+// 六角形の6頂点は角度が固定なので起動時に1回だけ計算して使い回す
+// ==========================================
+const HEX_OFFSETS = (() => {
+  const r = 140; // hexRadius と同じ値
+  return Array.from({ length: 6 }, (_, i) => ({
+    ox: Math.cos((Math.PI / 3) * i) * r,
+    oy: Math.sin((Math.PI / 3) * i) * r
+  }));
+})();
+
+// ==========================================
+// 高速化：距離の2乗による軽量当たり判定
+// Math.sqrt を呼ばず2乗値で大小比較するため通常の dist より大幅に速い
+// 使い方：dist2(a,b) < r*r のように半径も2乗して比較する
+// ==========================================
+const dist2 = (a, b) => { const dx = a.x - b.x, dy = a.y - b.y; return dx * dx + dy * dy; };
+
+// 互換用：Math.sqrt が必要な箇所（角度計算など）だけ残す
+const dist  = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+const rand = (min, max) => min + Math.random() * (max - min); // min〜maxの乱数を返す
+
+// ==========================================
+// AI挙動調整：滑らかな旋回補間（ラープ処理）
+// 現在角度 from から目標角度 to へ、最短回転方向で t の割合だけ近づける。
+// t=1.0 で即代入、t=0.1 ならゆっくり追従。
+// ※ 角度は -π〜+π の範囲で管理される前提。
+// ==========================================
+function lerpAngle(from, to, t) {
+  // 差分を -π〜+π に正規化して最短経路を選ぶ
+  let diff = to - from;
+  while (diff >  Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return from + diff * t;
+}
+
+// ──────────────────────────────────────────
+// Worm クラス：プレイヤーと敵AI共通のヘビオブジェクト
+// segs（セグメント配列）で体の各マスの座標を管理する
+// ──────────────────────────────────────────
+class Worm {
+  constructor(x, y, length, skinIndex, isPlayer = false) {
+    this.skinIndex = skinIndex;  // スキン番号（0〜11）
+    this.isPlayer = isPlayer;    // プレイヤーか敵AIかの判定
+    this.score = 0;
+    this.alive = true;
+    this.radius = 13;            // 体の当たり判定の半径
+    this.speed = isPlayer ? 3.5 : 2.2; // プレイヤーは少し速い
+    this.angle = Math.random() * Math.PI * 2; // 初期進行方向（ランダム）
+    this.name = isPlayer ? 'あなた' : ENEMY_NAMES[Math.floor(Math.random() * ENEMY_NAMES.length)];
+    // segs[0] が頭、segs[末尾] が尻尾。初期状態は横一列に並べる
+    this.segs = [];
+    for (let i = 0; i < length; i++) {
+      this.segs.push({ x: x - i * 7, y: y });
+    }
+    this.aiTimer = 0; // AIの方向転換タイマー（0になったら次の目標を決める）
+
+    // ==========================================
+    // AIレベル判定（サイズに応じた賢さのパラメータ設定）
+    // スコア・長さはスポーン後に外から設定されるため、
+    // updateAiLevel() を毎フレーム呼んで動的に更新する
+    // ==========================================
+    this.aiLevel = 'small'; // 'small' | 'medium' | 'large'
+    this.aiBoostTimer = 0;  // 大型AIがダッシュを維持するフレーム数
+  }
+
+  // ==========================================
+  // AIレベル判定（サイズに応じた賢さのパラメータ設定）
+  // 長さとスコアを合算して3段階に分類する
+  //   small  : 長さ < 40 かつ スコア < 100
+  //   medium : 長さ < 80 かつ スコア < 400
+  //   large  : それ以外（大型・超大型）
+  // ==========================================
+  updateAiLevel() {
+    if (!this.isPlayer) {
+      const len = this.segs.length;
+      const sc  = this.score;
+      if (len < 40 && sc < 100) {
+        this.aiLevel = 'small';
+      } else if (len < 80 && sc < 400) {
+        this.aiLevel = 'medium';
+      } else {
+        this.aiLevel = 'large';
+      }
+    }
+  }
+
+  // ──────────────────────────────────────────
+  // セグメントを末尾に追加してヘビを伸ばす
+  // 800マスを超えたらそれ以上伸びない（処理負荷対策）
+  // ──────────────────────────────────────────
+  addSegment(count) {
+    if (this.segs.length > 800) return; 
+    const last = this.segs[this.segs.length - 1] || { x: WORLD_W/2, y: WORLD_H/2 };
+    for (let i = 0; i < count; i++) this.segs.push({ x: last.x, y: last.y });
+  }
+
+  // ──────────────────────────────────────────
+  // 毎フレームの移動・AI思考・ブースト処理
+  // ──────────────────────────────────────────
+  update() {
+    if (!this.alive) return;
+
+    // スコアに応じて体のサイズを大きくする（最大+22px）
+    let baseRadius = 13 + Math.min(22, this.score / 50);
+    // 敵ミニマム化チートがONなら敵だけ強制的に小さくする
+    this.radius = (!this.isPlayer && isMiniEnemies) ? 6 : baseRadius;
+
+    let currentSpeed = this.speed;
+    let isBoosting = false;
+
+    // ──ブースト判定──
+    if (this.isPlayer) {
+      // プレイヤー：マウスクリックかスペースキーで発動（長さ10以上必要）
+      if ((boosting || keys['Space']) && this.segs.length > 10) isBoosting = true;
+    } else {
+      // 敵AI：スコアが200を超えたとき1.5%の確率でブーストする
+      if (this.score > 200 && Math.random() < 0.015) isBoosting = true;
+    }
+
+    if (isBoosting) {
+      currentSpeed *= 1.8; // ブースト中は1.8倍速
+      // 12%の確率で末尾のセグメントを1つ削除（ブーストで縮む演出）
+      // プレイヤーで無制限ブーストチートがONなら縮まない
+      if (Math.random() < 0.12 && !(this.isPlayer && isInfiniteBoost)) {
+        if (this.segs.length > 5) this.segs.pop();
+        this.score = Math.max(0, this.score - 1);
+      }
+    }
+
+    // ──プレイヤーの進行方向の計算──
+    if (this.isPlayer) {
+      let movedByKeys = false;
+      let dx = 0, dy = 0;
+      // WASDまたは矢印キーによる操作
+      if (keys['ArrowUp'] || keys['KeyW']) { dy = -1; movedByKeys = true; }
+      if (keys['ArrowDown'] || keys['KeyS']) { dy = 1; movedByKeys = true; }
+      if (keys['ArrowLeft'] || keys['KeyA']) { dx = -1; movedByKeys = true; }
+      if (keys['ArrowRight'] || keys['KeyD']) { dx = 1; movedByKeys = true; }
+
+      let targetAngle = this.angle;
+      if (movedByKeys) {
+        // キー入力がある場合はそちらを優先
+        targetAngle = Math.atan2(dy, dx);
+      } else {
+        // マウスカーソルの方向を目標角度にする
+        const worldMouseX = mouse.x - W / 2 + cam.x;
+        const worldMouseY = mouse.y - H / 2 + cam.y;
+        targetAngle = Math.atan2(worldMouseY - this.segs[0].y, worldMouseX - this.segs[0].x);
+      }
+      
+      // カオスイベント「操作反転」中は目標角度を180度回転させる
+      if (currentEvent === 'reverse') {
+        targetAngle += Math.PI; 
+      }
+      
+      // 急な方向転換を防ぐため、最大旋回速度で少しずつ角度を近づける
+      let diff = targetAngle - this.angle;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      
+      const turnSpeed = isBoosting ? 0.16 : 0.13;
+      this.angle += Math.max(-turnSpeed, Math.min(turnSpeed, diff));
+    }
+
+    // ──頭を進行方向に1フレーム分移動させる──
+    this.segs[0].x += Math.cos(this.angle) * currentSpeed;
+    this.segs[0].y += Math.sin(this.angle) * currentSpeed;
+
+    // ==========================================
+    // 高速化：距離の2乗による軽量当たり判定
+    // セグメント追従ループ：spacing^2 と dist2 で比較して sqrt を排除
+    // ==========================================
+    const spacing  = this.radius * 0.45; // セグメント間の目標間隔
+    const spacing2 = spacing * spacing;   // 2乗値をループ外で一度だけ計算
+    for (let i = 1; i < this.segs.length; i++) {
+      const prev = this.segs[i - 1];
+      const curr = this.segs[i];
+      const dxS = prev.x - curr.x;
+      const dyS = prev.y - curr.y;
+      // 間隔が開きすぎたら前のセグメントの方向へ引き寄せる
+      if (dxS * dxS + dyS * dyS > spacing2) {
+        const a = Math.atan2(dyS, dxS); // atan2 は sqrt 不要なので問題なし
+        curr.x = prev.x - Math.cos(a) * spacing;
+        curr.y = prev.y - Math.sin(a) * spacing;
+      }
+    }
+  }
+
+  // ──────────────────────────────────────────
+  // スキン番号と時間からセグメントの色を決定する
+  // レインボーとゼブラは特殊計算で動的に色が変わる
+  // ──────────────────────────────────────────
+  getSkinColors(i, time) {
+    switch(this.skinIndex) {
+      case 0: return { seg: '#ff4757', head: '#ff6b81' }; // ルビーレッド
+      case 1: return { seg: '#1e90ff', head: '#54a0ff' }; // サファイアブルー
+      case 2: // レインボー：セグメント番号と時間で色相を変化させる（文字列生成を最小化）
+        const h2 = Math.floor((time * 150) + (i * 4)) % 360;
+        return { seg: `hsl(${h2},95%,50%)`, head: `hsl(${h2},100%,65%)` };
+      case 3: return { seg: '#ff9f43', head: '#ffa502' }; // サンセットオレンジ
+      case 4: return { seg: '#2ed573', head: '#26af5f' }; // エメラルドグリーン
+      case 5: return { seg: '#b800cc', head: '#ef57ff' }; // アメジストパープル
+      case 6: return { seg: '#e1b12c', head: '#fbc531' }; // トパーズゴールド
+      case 7: return { seg: '#2f3640', head: '#718093' }; // ダークシャドウ
+      case 8: return { seg: '#01a3a4', head: '#00d2d3' }; // ターコイズシアン
+      case 9: return { seg: '#ff9ff3', head: '#feca57' }; // パステルキャンディ
+      case 10: // ストライプゼブラ：4マスごとに赤と白を交互にする
+        return (i % 4 < 2) ? { seg: '#ff4d4d', head: '#ff4d4d' } : { seg: '#ffffff', head: '#ffffff' };
+      case 11: return { seg: '#dcdde1', head: '#ffffff' }; // プラチナホワイト
+      default: return { seg: '#ff4757', head: '#ff6b81' };
+    }
+  }
+
+  // ==========================================
+  // 高速化：画面外カリング（描画スキップ）
+  // 頭のスクリーン座標を先に計算し、マージン込みで完全に画面外なら
+  // 全セグメントの描画を丸ごとスキップする
+  // ==========================================
+  draw(cx, cy) {
+    if (!this.alive || this.segs.length === 0) return;
+
+    const hx = this.segs[0].x - cx + W / 2;
+    const hy = this.segs[0].y - cy + H / 2;
+    // 頭が画面外（マージン100px）ならまるごとスキップ
+    if (hx < -100 || hx > W + 100 || hy < -100 || hy > H + 100) return;
+
+    ctx.save();
+    const time = Date.now() / 1000;
+    // ヘビが長い場合はセグメントを間引いて描画コストを抑える
+    const step = this.segs.length > 150 ? (this.segs.length > 400 ? 3 : 2) : 1;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // ==========================================
+    // 高速化：画面外カリング（描画スキップ）
+    // 各セグメントのスクリーン座標を計算し、画面外のものは arc/fill を呼ばない
+    // ==========================================
+    for (let i = this.segs.length - 1; i >= 0; i -= step) {
+      const sx = this.segs[i].x - cx + W / 2;
+      const sy = this.segs[i].y - cy + H / 2;
+      // セグメントが画面外（radius分のマージン付き）ならスキップ
+      if (sx < -this.radius || sx > W + this.radius || sy < -this.radius || sy > H + this.radius) continue;
+      const colors = this.getSkinColors(i, time);
+      ctx.beginPath();
+      ctx.arc(sx, sy, this.radius, 0, Math.PI * 2);
+      ctx.fillStyle = (i === 0) ? colors.head : colors.seg;
+      ctx.fill();
+    }
+
+    // ──目の描画（白目→黒目の順で2つ）──
+    const eyeOffset = this.radius * 0.38;
+    const eyeRadius = this.radius * 0.3;
+    const cosA = Math.cos(this.angle + Math.PI / 2);
+    const sinA = Math.sin(this.angle + Math.PI / 2);
+    const cosH = Math.cos(this.angle) * eyeOffset * 0.4;
+    const sinH = Math.sin(this.angle) * eyeOffset * 0.4;
+
+    for (let side of [-1, 1]) {
+      const ex = hx + cosA * (eyeOffset * side) + cosH;
+      const ey = hy + sinA * (eyeOffset * side) + sinH;
+      ctx.beginPath(); ctx.arc(ex, ey, eyeRadius, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.beginPath(); ctx.arc(ex, ey, eyeRadius * 0.5, 0, Math.PI * 2); ctx.fillStyle = '#000'; ctx.fill();
+    }
+
+    // ──アクセサリーの描画（プレイヤーのみ、選択中のとき）──
+    if (this.isPlayer && playerSelectedAccIndex > 0) {
+      ctx.save();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+            // ==========================================
+      // アクセサリー絵文字リスト（index 0 = なし）
+      // ==========================================
+      const ACC_EMOJIS = [
+        '',                // 0: なし
+        '\u{1F451}',       // 1: 王冠 👑
+        '\u{1F3A9}',       // 2: 魔女の帽子 🎩
+        '\u{1F607}',       // 3: 天使の輪 😇
+        '\u{1F431}',       // 4: 猫耳 🐱
+        '\u{1F380}',       // 5: リボン 🎀
+        '\u{1F385}',       // 6: サンタ帽 🎅
+        '\u{1F393}',       // 7: 卒業帽 🎓
+        '\u{1F920}',       // 8: カウボーイハット 🤠
+        '\u{1F608}',       // 9: 悪魔の角 😈
+        '\u{1F525}',       // 10: 炎オーラ 🔥
+        '\u2B50',          // 11: 星 ⭐
+        '\u{1F480}',       // 12: ドクロ 💀
+        '\u{1F430}',       // 13: うさ耳 🐰
+        '\u{1F98A}',       // 14: キツネ耳 🦊
+        '\u{1F47D}',       // 15: 宇宙人 👽
+      ];
+      const itemEmoji = ACC_EMOJIS[playerSelectedAccIndex] || '';
+      const idx = playerSelectedAccIndex;
+
+      // ==========================================
+      // 顔に重ねる系アイテム（4/8/9/16/17/18/19）は
+      // 進行方向の回転をかけず、頭の中心に大きめで直接描画する。
+      // 耳・帽子系は頭の上端に揃え、顔全体を覆う系は中心に重ねる。
+      // ==========================================
+      const FACE_ITEMS = new Set([3, 4, 8, 9, 12, 13, 14, 15]);
+
+      if (FACE_ITEMS.has(idx)) {
+        // ── 顔重ね描画：回転なし、頭の中心基準 ──
+        // フォントをヘビの直径に近いサイズにして顔を覆う
+        const faceSize = Math.floor(this.radius * 2.2);
+        ctx.font = `bold ${faceSize}px sans-serif`;
+
+        // アイテムごとの縦オフセット（頭の中心からのズレ）
+        let faceOffsetY = 0;
+        switch (idx) {
+          case 3:  faceOffsetY = -this.radius * 0.3; break; // 天使の輪：頭に重ねて輪が上に出る
+          case 4:  faceOffsetY = -this.radius * 0.5; break; // 猫耳：少し上（耳が頭上に出る）
+          case 8:  faceOffsetY = -this.radius * 0.3; break; // カウボーイ：ツバが顔に被る
+          case 9:  faceOffsetY = -this.radius * 0.4; break; // 悪魔の角：額上に角が出る
+          case 12: faceOffsetY =  0;                 break; // ドクロ：顔に完全に重ねる
+          case 13: faceOffsetY = -this.radius * 0.5; break; // うさ耳：上に飛び出す
+          case 14: faceOffsetY = -this.radius * 0.4; break; // キツネ耳：上寄り
+          case 15: faceOffsetY =  0;                 break; // 宇宙人：顔に完全に重ねる
+        }
+        ctx.fillText(itemEmoji, hx, hy + faceOffsetY);
+
+      } else {
+        // ── 頭上装着系：進行方向に合わせて回転し、頭の上に載せる ──
+        ctx.font = `bold ${Math.floor(this.radius * 1.8)}px sans-serif`;
+        ctx.translate(hx, hy); ctx.rotate(this.angle + Math.PI / 2);
+
+        let offsetY = -this.radius * 1.2; // デフォルト：頭上
+        switch (idx) {
+          case 5:  offsetY =  this.radius * 0.8; break; // リボン：顎のあたり
+          case 10: offsetY = -this.radius * 1.0; break; // 炎：頭に密着
+          case 11: offsetY = -this.radius * 1.2; break; // 星：頭上
+        }
+        ctx.fillText(itemEmoji, 0, offsetY);
+      }
+
+      ctx.restore();
+    }
+
+    // ==========================================
+    // 高速化：measureText キャッシュ
+    // 名前文字列が変わらない限り毎フレームの measureText 呼び出しを省略する
+    // ==========================================
+    if (this._cachedName !== this.name) {
+      ctx.font = 'bold 12px sans-serif'; // measureText前にフォント設定が必要
+      this._nameWidth  = ctx.measureText(this.name).width;
+      this._cachedName = this.name;
+    }
+    const textWidth = this._nameWidth;
+
+    // ──名前の描画（頭の上に半透明の背景付きで表示）──
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const textY = hy - this.radius - 14;
+
+    // 名前の背景（角丸の黒い半透明ボックス）
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+    const rx = hx - textWidth / 2 - 8;
+    const ry = textY - 9;
+    const rw = textWidth + 16;
+    const rh = 18;
+    const rr = 6;
+    ctx.beginPath();
+    ctx.moveTo(rx + rr, ry);
+    ctx.lineTo(rx + rw - rr, ry);
+    ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + rr);
+    ctx.lineTo(rx + rw, ry + rh - rr);
+    ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - rr, ry + rh);
+    ctx.lineTo(rx + rr, ry + rh - rr);
+    ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - rr);
+    ctx.lineTo(rx, ry + rr);
+    ctx.quadraticCurveTo(rx, ry, rx + rr, ry);
+    ctx.closePath();
+    ctx.fill();
+
+    // 黒いアウトライン → 本文（プレイヤーはシアン、敵は白）
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 3.5;
+    ctx.strokeText(this.name, hx, textY);
+    ctx.fillStyle = this.isPlayer ? '#00ffcc' : '#ffffff';
+    ctx.fillText(this.name, hx, textY);
+
+    ctx.restore();
+  }
+}
+
+// ──────────────────────────────────────────
+// エサオブジェクトの生成
+// 座標・サイズ・色相・移動速度をランダムで設定する
+// ──────────────────────────────────────────
+// ──────────────────────────────────────────
+// エサのサイズ定義
+// 小・中・大の3段階。r を直接指定したときはそのまま使う
+// （死亡ヘビのばら撒きは元のヘビの大きさに依存するため）
+// ──────────────────────────────────────────
+const FOOD_TIERS = [
+  { minR: 3,  maxR: 5,  weight: 60 }, // 小：よく見かける普通サイズ
+  { minR: 6,  maxR: 9,  weight: 30 }, // 中：少し光って目立つ
+  { minR: 10, maxR: 13, weight: 10 }, // 大：レアで取ると一気に大きくなる
+];
+// 累積ウェイト（抽選用）
+const FOOD_TIER_TOTAL = FOOD_TIERS.reduce((s, t) => s + t.weight, 0);
+
+function makeFood(x, y, r = 0) {
+  let radius;
+  if (isMegaFoodMode) {
+    radius = rand(15, 25); // メガエサチート中は最大サイズ固定
+  } else if (r > 0) {
+    radius = r; // 死亡ヘビのばら撒き時など、呼び出し元が指定したサイズをそのまま使う
+  } else {
+    // 3段階の抽選でサイズを決める（大エサは出にくい）
+    let roll = Math.random() * FOOD_TIER_TOTAL;
+    let tier = FOOD_TIERS[0];
+    for (const t of FOOD_TIERS) {
+      if (roll < t.weight) { tier = t; break; }
+      roll -= t.weight;
+    }
+    radius = rand(tier.minR, tier.maxR);
+  }
+  return {
+    x: x || rand(50, WORLD_W - 50),
+    y: y || rand(50, WORLD_H - 50),
+    radius,
+    hue: rand(0, 360),    // 発光色の色相（HSLで使用）
+    vx: rand(-0.3, 0.3),  // X方向の微小ドリフト速度
+    vy: rand(-0.3, 0.3)   // Y方向の微小ドリフト速度
+  };
+}
+
+// ──────────────────────────────────────────
+// 死亡したヘビからエサをばら撒く処理
+// ヘビの体の座標に沿って一定間隔でエサを生成する
+// ──────────────────────────────────────────
+function dropFoodFromWorm(w) {
+  if (!w.segs || w.segs.length < 2) return;
+  const step = Math.max(3, Math.floor(w.segs.length / 6)); // 長いヘビほど間隔を広げる
+  for (let i = 0; i < w.segs.length; i += step) {
+    if (foods.length >= MAX_FOOD) break; // 上限を超えたら追加しない
+    foods.push(makeFood(w.segs[i].x + rand(-5, 5), w.segs[i].y + rand(-5, 5), w.radius * 0.4));
+  }
+}
+
+// ==========================================
+// AIスポーン処理（初期サイズのランダム生成）
+// 小型・中型・大型・超大型の4段階に分けてランダムに振り分ける
+// ==========================================
+function spawnEnemy() {
+  const randomSkin = Math.floor(Math.random() * 12);
+
+  // ==========================================
+  // バグ修正：敵の突然出現を防止
+  // プレイヤーから最低600px離れた座標が見つかるまで再抽選する。
+  // 最大20回試行して見つからなければそのまま使う（無限ループ防止）。
+  // ==========================================
+  let x, y;
+  const MIN_SPAWN_DIST2 = 600 * 600;
+  let tries = 0;
+  do {
+    x = rand(120, WORLD_W - 120);
+    y = rand(120, WORLD_H - 120);
+    tries++;
+  } while (
+    tries < 20 &&
+    player &&
+    player.segs.length > 0 &&
+    dist2({ x, y }, player.segs[0]) < MIN_SPAWN_DIST2
+  );
+
+  // サイズ帯をランダムに抽選（小40% / 中30% / 大20% / 超大10%）
+  const roll = Math.random();
+  let initLength, initScore;
+  if (roll < 0.40) {
+    // 【小型】長さ10〜20、スコア0
+    initLength = Math.floor(rand(10, 20));
+    initScore  = 0;
+  } else if (roll < 0.70) {
+    // 【中型】長さ25〜50、スコア50〜150
+    initLength = Math.floor(rand(25, 50));
+    initScore  = Math.floor(rand(50, 150));
+  } else if (roll < 0.90) {
+    // 【大型】長さ55〜100、スコア200〜500
+    initLength = Math.floor(rand(55, 100));
+    initScore  = Math.floor(rand(200, 500));
+  } else {
+    // 【超大型】長さ110〜180、スコア600〜1200
+    initLength = Math.floor(rand(110, 180));
+    initScore  = Math.floor(rand(600, 1200));
+  }
+
+  const enemy = new Worm(x, y, initLength, randomSkin, false);
+  enemy.score = initScore; // 初期スコアを設定してサイズ感を反映
+  return enemy;
+}
+
+// ──────────────────────────────────────────
+// ゲーム初期化：プレイヤー・エサ・敵を生成してゲームを開始する
+// ──────────────────────────────────────────
+function init() {
+  // ==========================================
+  // バグ修正：開始直後ダッシュの防止
+  // スタートボタンのクリックで boosting=true になったまま
+  // ゲームが始まるのを防ぐため、ここで強制リセットする。
+  // keys も前回プレイの押しっぱなしが残らないようクリアする。
+  // ==========================================
+  boosting = false;
+  for (const k in keys) delete keys[k];
+
+  // プレイヤーをワールド中央に生成
+  player = new Worm(WORLD_W / 2, WORLD_H / 2, 22, playerSelectedSkinIndex, true);
+  
+  // エサを初期数だけランダム配置
+  foods = [];
+  for (let i = 0; i < FOOD_COUNT; i++) foods.push(makeFood());
+  
+  // 敵AIをランダムなサイズ・スキン・位置で生成（spawnEnemy関数で統一）
+  enemies = [];
+  for (let i = 0; i < AI_COUNT; i++) {
+    enemies.push(spawnEnemy());
+  }
+
+  bullets = []; // 弾丸リストを初期化
+
+  // カオスイベントをリセット
+  currentEvent = 'none';
+  eventTimer = 0;
+  nextEventTimer = rand(300, 500);
+  eventAlertEl.style.display = 'none';
+  killLogContainer.innerHTML = '';
+  _lbFrame = 0; // リーダーボード間引きカウンターをリセット（オーバーフロー防止）
+
+  running = true;
+  overlay.classList.add('hidden'); // タイトル画面を隠す
+  loop(); // ゲームループを開始
+}
+
+// ──────────────────────────────────────────
+// メインゲームループ：毎フレーム update → render の順で実行
+// ──────────────────────────────────────────
+function loop() {
+  if (!running) return;
+  update();  // 物理・AI・衝突判定
+  render();  // 画面への描画
+  animId = requestAnimationFrame(loop); // 次フレームを予約
+}
+
+// ──────────────────────────────────────────
+// update：毎フレームのゲーム状態更新
+// カオスイベント → プレイヤー → エサ → 弾丸 → 敵AI の順で処理
+// ──────────────────────────────────────────
+function update() {
+
+  // ──カオスイベントの進行管理──
+  if (isChaosModeGlobal) {
+    if (currentEvent === 'none') {
+      nextEventTimer--;
+      if (nextEventTimer <= 0) {
+        // 次のイベントをランダムで選択（50%で反転、50%で嵐）
+        currentEvent = Math.random() < 0.5 ? 'reverse' : 'storm';
+        eventTimer = rand(240, 400); // イベントの継続時間
+        
+        eventAlertEl.style.display = 'block';
+        if (currentEvent === 'reverse') {
+          eventAlertEl.style.background = 'rgba(235, 94, 40, 0.9)';
+          eventAlertEl.textContent = '🚨 警告：重力反転中！ (操作が180度逆になります)';
+        } else {
+          eventAlertEl.style.background = 'rgba(155, 89, 182, 0.9)';
+          eventAlertEl.textContent = '🚨 警告：磁気嵐発生中！ (エサが超狂暴化して暴走移動)';
+        }
+      }
+    } else {
+      // イベントのカウントダウン、0になったら終了
+      eventTimer--;
+      if (eventTimer <= 0) { 
+        currentEvent = 'none';
+        nextEventTimer = rand(600, 1000); // 次のイベントまでの待機時間を長めに
+        eventAlertEl.style.display = 'none';
+      }
+    }
+  }
+
+  // ──オート巨大化チート：毎フレームスコアを自動加算──
+  if (isAutoScore && player) {
+    player.score += 5;
+    if (Math.random() < 0.15) player.addSegment(1); // 15%の確率でセグメントも追加
+  }
+
+  player.update();
+  const pHead = player.segs[0]; // プレイヤーの頭の座標
+
+  // ──プレイヤーの外壁衝突判定──
+  if (pHead.x < 0 || pHead.x > WORLD_W || pHead.y < 0 || pHead.y > WORLD_H) {
+    if (!isGodMode) { 
+      gameOver(); // 無敵でなければゲームオーバー
+      return; 
+    } else {
+      // 無敵時は壁でバウンスして押し返す
+      pHead.x = Math.max(0, Math.min(WORLD_W, pHead.x));
+      pHead.y = Math.max(0, Math.min(WORLD_H, pHead.y));
+      player.angle += Math.PI;
+    }
+  }
+
+  // ==========================================
+  // 高速化：距離の2乗による軽量当たり判定
+  // 磁石チート：sqrt を使わず dx*dx+dy*dy で距離比較
+  // ==========================================
+  if (isMagnetMode) {
+    const range2 = 450 * 450; // 2乗値で比較
+    for (let i = 0; i < foods.length; i++) {
+      const f = foods[i];
+      if (dist2(pHead, f) < range2) { f.x += (pHead.x - f.x) * 0.16; f.y += (pHead.y - f.y) * 0.16; }
+    }
+  }
+
+  // ──エサとの衝突・移動処理──
+  for (let i = foods.length - 1; i >= 0; i--) {
+    const f = foods[i];
+    
+    if (currentEvent === 'storm') {
+      // 磁気嵐イベント中：エサが25倍速で暴走、壁で跳ね返る
+      f.x += f.vx * 25; 
+      f.y += f.vy * 25;
+      if (f.x < 10 || f.x > WORLD_W - 10) f.vx *= -1; // 左右の壁で反射
+      if (f.y < 10 || f.y > WORLD_H - 10) f.vy *= -1; // 上下の壁で反射
+    } else {
+      // 通常時：ゆっくりドリフトするだけ
+      f.x += f.vx; f.y += f.vy; 
+    }
+
+    // ==========================================
+    // 高速化：距離の2乗による軽量当たり判定
+    // プレイヤーの頭とエサの衝突：sqrt 不要の dist2 で判定
+    // ==========================================
+    if (dist2(pHead, f) < (player.radius + f.radius) * (player.radius + f.radius)) {
+      player.score += Math.floor(f.radius * 1.4); // エサのサイズに応じてスコア加算
+      // エサのサイズに比例してヘビを伸ばす
+      // 小(r<6)→1マス / 中(r<10)→2マス / 大(r≥10)→4マス
+      const grow = f.radius >= 10 ? 4 : f.radius >= 6 ? 2 : 1;
+      player.addSegment(grow);
+      foods.splice(i, 1); // 食べたエサを削除
+    }
+  }
+
+  // ──弾丸の移動と衝突判定処理──
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.x += b.vx;
+    b.y += b.vy;
+    b.life--;
+
+    // 画面外または寿命切れで弾を消す
+    if (b.x < 0 || b.x > WORLD_W || b.y < 0 || b.y > WORLD_H || b.life <= 0) {
+      bullets.splice(i, 1);
+      continue;
+    }
+
+    // ==========================================
+    // 高速化：距離の2乗による軽量当たり判定
+    // 弾丸と敵セグメントの衝突：dist2 で sqrt を排除
+    // ==========================================
+    let bulletHit = false;
+    for (let j = 0; j < enemies.length; j++) {
+      const e = enemies[j];
+      if (!e.alive) continue;
+      const hitR2 = (b.radius + e.radius) * (b.radius + e.radius);
+      for (let s = 0; s < e.segs.length; s++) {
+        if (dist2(b, e.segs[s]) < hitR2) {
+          e.alive = false;
+          addKillLog("あなた(弾) 🎯", e.name);
+          bulletHit = true;
+          break;
+        }
+      }
+      if (bulletHit) break;
+    }
+
+    if (bulletHit) {
+      bullets.splice(i, 1); // 命中した弾を削除
+    }
+  }
+
+  // ──敵AIの更新処理──
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+
+    // ==========================================
+    // 死亡処理：エサをばら撒いてリスポーン
+    // spawnEnemy() で統一することでサイズランダム化を維持
+    // ==========================================
+    if (!e.alive) { 
+      dropFoodFromWorm(e);
+      enemies[i] = spawnEnemy(); // タスク#4：リスポーンも同じスポーン関数を使用
+      continue;
+    }
+
+    // ==========================================
+    // AIレベル判定（サイズに応じた賢さのパラメータ設定）
+    // 毎フレーム更新してスコアの増減をリアルタイムに反映する
+    // ==========================================
+    e.updateAiLevel();
+
+    // ==========================================
+    // AI移動・衝突回避ロジック（思考アルゴリズム）
+    // aiLevel に応じて small / medium / large の3段階で分岐する
+    // 各レベルで「目標角度（e.targetAngle）」だけを更新し、
+    // 実際の angle への適用は下部の毎フレーム lerp で行う
+    // ==========================================
+    e.aiTimer--;
+    if (e.aiTimer <= 0) {
+      const eHead = e.segs[0];
+
+      if (e.aiLevel === 'small') {
+        // ──────────────────────────────────────────
+        // 【小型AI】ランダム行動
+        // 目の前250px以内のエサだけ認識。なければランダムにふらつく。
+        // 回避反応なし（障害物を無視して直進する）
+        // ──────────────────────────────────────────
+        let closest = null, minDist2 = 250 * 250;
+        for (let j = 0; j < foods.length; j++) {
+          const d2 = dist2(eHead, foods[j]);
+          if (d2 < minDist2) { minDist2 = d2; closest = foods[j]; }
+        }
+        if (closest) {
+          e.targetAngle = Math.atan2(closest.y - eHead.y, closest.x - eHead.x);
+        } else {
+          // ランダムにふらつく（現在角度からの加算でなめらかに変化）
+          e.targetAngle = e.angle + rand(-0.6, 0.6);
+        }
+        e.aiTimer = Math.floor(rand(80, 140)); // 思考間隔が長い（反応が遅い）
+
+      } else if (e.aiLevel === 'medium') {
+        // ──────────────────────────────────────────
+        // 【中型AI】回避 + 大エサ優先
+        // ① 壁が近ければ中心方向へ向きを変える
+        // ② 他ヘビの胴体が前方にあれば回避する
+        // ③ 大きなエサ（高 radius）を優先して狙う
+        // ──────────────────────────────────────────
+        let targetAngle = e.angle;
+        const wallMargin = 200;
+        let wallAvoid = false;
+
+        // ==========================================
+        // AI回避ロジック：自然な障害物回避アルゴリズム
+        // 壁が近いときは中心方向へ滑らかに向き直す
+        // ==========================================
+        if (eHead.x < wallMargin || eHead.x > WORLD_W - wallMargin ||
+            eHead.y < wallMargin || eHead.y > WORLD_H - wallMargin) {
+          targetAngle = Math.atan2(WORLD_H / 2 - eHead.y, WORLD_W / 2 - eHead.x);
+          wallAvoid = true;
+        }
+
+        if (!wallAvoid) {
+          // ==========================================
+          // AI回避ロジック：自然な障害物回避アルゴリズム
+          // 他ヘビ胴体を検出したら離反方向へ向く。
+          // ランダムノイズ（±0.25rad）を乗せて往復振動を防ぐ
+          // ==========================================
+          let avoidAngle = null;
+          const avoidRange2 = 180 * 180;
+          outerLoop: for (let k = 0; k < enemies.length; k++) {
+            if (k === i) continue;
+            const other = enemies[k];
+            if (!other.alive) continue;
+            for (let s = 0; s < other.segs.length; s++) {
+              if (dist2(eHead, other.segs[s]) < avoidRange2) {
+                // 離反方向にランダムノイズを加えて毎回同じ向きに戻るのを防ぐ
+                avoidAngle = Math.atan2(eHead.y - other.segs[s].y, eHead.x - other.segs[s].x)
+                             + rand(-0.25, 0.25);
+                break outerLoop;
+              }
+            }
+          }
+
+          if (avoidAngle !== null) {
+            targetAngle = avoidAngle;
+          } else {
+            // エサ探索：大きくて近いほど優先（dist2 で sqrt 不要）
+            let bestFood = null, bestScore = -1;
+            const searchRange2 = 500 * 500;
+            for (let j = 0; j < foods.length; j++) {
+              const dx = eHead.x - foods[j].x, dy = eHead.y - foods[j].y;
+              const d2 = dx * dx + dy * dy;
+              if (d2 < searchRange2) {
+                const score = foods[j].radius / (d2 + 1);
+                if (score > bestScore) { bestScore = score; bestFood = foods[j]; }
+              }
+            }
+            if (bestFood) {
+              targetAngle = Math.atan2(bestFood.y - eHead.y, bestFood.x - eHead.x);
+            } else {
+              targetAngle = e.angle + rand(-0.3, 0.3);
+            }
+          }
+        }
+
+        e.targetAngle = targetAngle;
+        e.aiTimer = Math.floor(rand(45, 80));
+
+      } else {
+        // ──────────────────────────────────────────
+        // 【大型〜超大型AI】先読み + 囲い込み + ダッシュ
+        // ① 壁・他ヘビへの回避は厳格に行う（広範囲）
+        // ② 死んだヘビのエサ塊（大量エサ密集地点）を優先して狙う
+        // ③ 小さなヘビの進行方向を先読みして進路を塞ぐ囲い込みを行う
+        // ④ ターゲットが近ければダッシュ（aiBoostTimer）を発動する
+        // ──────────────────────────────────────────
+        let targetAngle = e.angle;
+        const wallMargin = 280;
+
+        // ==========================================
+        // AI回避ロジック：自然な障害物回避アルゴリズム
+        // 壁が近いとき → 中心方向へ lerpAngle で滑らかに向き直す。
+        // continue を廃止してダッシュキャンセルだけ行い、
+        // 実際の旋回は下部の毎フレーム lerp に委ねる
+        // ==========================================
+        let wallAvoidLarge = false;
+        if (eHead.x < wallMargin || eHead.x > WORLD_W - wallMargin ||
+            eHead.y < wallMargin || eHead.y > WORLD_H - wallMargin) {
+          targetAngle = Math.atan2(WORLD_H / 2 - eHead.y, WORLD_W / 2 - eHead.x);
+          e.aiBoostTimer = 0; // 壁回避中はダッシュキャンセル
+          wallAvoidLarge = true;
+          e.aiTimer = Math.floor(rand(15, 30));
+        }
+
+        if (!wallAvoidLarge) {
+          // ==========================================
+          // AI回避ロジック：自然な障害物回避アルゴリズム
+          // 他ヘビ胴体を広範囲（250px）で検出。
+          // ランダムノイズ（±0.3rad）で往復振動を抑制する
+          // ==========================================
+          let avoidAngle = null;
+          const avoidRange2 = 250 * 250;
+          outerLargLoop: for (let k = 0; k < enemies.length; k++) {
+            if (k === i) continue;
+            const other = enemies[k];
+            if (!other.alive) continue;
+            for (let s = 0; s < other.segs.length; s++) {
+              if (dist2(eHead, other.segs[s]) < avoidRange2) {
+                avoidAngle = Math.atan2(eHead.y - other.segs[s].y, eHead.x - other.segs[s].x)
+                             + rand(-0.3, 0.3);
+                break outerLargLoop;
+              }
+            }
+          }
+          // プレイヤーの胴体も回避対象
+          if (avoidAngle === null) {
+            for (let s = 0; s < player.segs.length; s++) {
+              if (dist2(eHead, player.segs[s]) < avoidRange2) {
+                avoidAngle = Math.atan2(eHead.y - player.segs[s].y, eHead.x - player.segs[s].x)
+                             + rand(-0.3, 0.3);
+                break;
+              }
+            }
+          }
+
+          if (avoidAngle !== null) {
+            targetAngle = avoidAngle;
+            e.aiBoostTimer = 0; // 回避中はダッシュしない
+          } else {
+            // ==========================================
+            // 高速化：エサ密集計算のサンプリング軽量化
+            // 全エサ×全エサの O(N²) ループをやめ、最大30個のサンプルで近似
+            // ==========================================
+            let bestCluster = null, bestClusterVal = 0;
+            const clusterRange2 = 100 * 100;
+            const sampleStep = Math.max(1, Math.floor(foods.length / 30));
+            for (let j = 0; j < foods.length; j += sampleStep) {
+              let clusterVal = 0;
+              for (let k = 0; k < foods.length; k += sampleStep) {
+                if (dist2(foods[j], foods[k]) < clusterRange2) clusterVal += foods[k].radius;
+              }
+              const dx = eHead.x - foods[j].x, dy = eHead.y - foods[j].y;
+              const priority = clusterVal / (dx * dx + dy * dy + 1);
+              if (priority > bestClusterVal) { bestClusterVal = priority; bestCluster = foods[j]; }
+            }
+
+            // 小さなヘビの進行方向を先読みして囲い込む
+            let interceptTarget = null;
+            const huntRange2 = 600 * 600;
+            for (let k = 0; k < enemies.length; k++) {
+              if (k === i) continue;
+              const prey = enemies[k];
+              if (!prey.alive || prey.aiLevel !== 'small') continue;
+              if (dist2(eHead, prey.segs[0]) < huntRange2) {
+                const predictX = prey.segs[0].x + Math.cos(prey.angle) * prey.speed * 30;
+                const predictY = prey.segs[0].y + Math.sin(prey.angle) * prey.speed * 30;
+                interceptTarget = { x: predictX, y: predictY };
+                break;
+              }
+            }
+            // プレイヤーも囲い込み対象（プレイヤーが小さいとき）
+            if (!interceptTarget && player.segs.length < 60 && dist2(eHead, player.segs[0]) < huntRange2) {
+              const predictX = player.segs[0].x + Math.cos(player.angle) * player.speed * 30;
+              const predictY = player.segs[0].y + Math.sin(player.angle) * player.speed * 30;
+              interceptTarget = { x: predictX, y: predictY };
+            }
+
+            const finalTarget = interceptTarget || bestCluster;
+            if (finalTarget) {
+              targetAngle = Math.atan2(finalTarget.y - eHead.y, finalTarget.x - eHead.x);
+              const dx = eHead.x - finalTarget.x, dy = eHead.y - finalTarget.y;
+              if (dx * dx + dy * dy < 350 * 350) {
+                e.aiBoostTimer = Math.floor(rand(20, 50));
+              }
+            } else {
+              targetAngle = e.angle + rand(-0.2, 0.2);
+            }
+          }
+        }
+
+        e.targetAngle = targetAngle;
+        e.aiTimer = Math.floor(rand(15, 40));
+      }
+
+      // カオスイベント「操作反転」中は目標角度を180度反転
+      if (currentEvent === 'reverse') {
+        e.targetAngle += Math.PI;
+      }
+    } // aiTimer ブロック終わり
+
+    // ==========================================
+    // AI挙動調整：滑らかな旋回補間（ラープ処理）
+    // aiTimer の思考間隔に関わらず毎フレーム実行し、
+    // e.angle を e.targetAngle に向かって少しずつ近づける。
+    // レベルが高いほど旋回速度（t）が速く、俊敏に動く。
+    // ==========================================
+    if (e.targetAngle === undefined) e.targetAngle = e.angle; // 初回フレーム保護
+    {
+      // レベル別の旋回速度：small=ゆっくり / medium=普通 / large=俊敏
+      const turnT = e.aiLevel === 'large' ? 0.18
+                  : e.aiLevel === 'medium' ? 0.12
+                  : 0.07;
+      e.angle = lerpAngle(e.angle, e.targetAngle, turnT);
+    }
+
+    // 大型AIのダッシュ処理
+    if (e.aiLevel === 'large' && e.aiBoostTimer > 0) {
+      e.aiBoostTimer--;
+      e.speed = 3.8;
+    } else if (!e.isPlayer) {
+      if (e.aiLevel === 'large')       e.speed = 2.4;
+      else if (e.aiLevel === 'medium') e.speed = 2.2;
+      else                             e.speed = 1.9;
+    }
+
+    e.update();
+    const eHead = e.segs[0]; // 衝突判定に使うヘッド座標（update後に取得）
+
+    // ──敵の外壁衝突：壁に当たったら死亡──
+    if (eHead.x < 0 || eHead.x > WORLD_W || eHead.y < 0 || eHead.y > WORLD_H) {
+      e.alive = false; 
+      addKillLog("🌌 境界線", e.name);
+      continue;
+    }
+
+    // ==========================================
+    // 高速化：距離の2乗による軽量当たり判定
+    // 敵がエサを食べる衝突判定：dist2 で sqrt を排除
+    // ==========================================
+    for (let j = foods.length - 1; j >= 0; j--) {
+      const hitR2 = (e.radius + foods[j].radius) * (e.radius + foods[j].radius);
+      if (dist2(eHead, foods[j]) < hitR2) {
+        e.score += 3; e.addSegment(1); foods.splice(j, 1);
+      }
+    }
+
+    // ==========================================
+    // 高速化：距離の2乗による軽量当たり判定
+    // 敵 vs 他の敵：dist2 で sqrt を排除
+    // ==========================================
+    for (let k = 0; k < enemies.length; k++) {
+      if (i === k) continue; // 自分自身には当たらない
+      const otherEnemy = enemies[k];
+      if (!otherEnemy.alive) continue;
+      const hitR2 = (e.radius + otherEnemy.radius * 0.8) * (e.radius + otherEnemy.radius * 0.8);
+      for (let s = 0; s < otherEnemy.segs.length; s++) {
+        if (dist2(eHead, otherEnemy.segs[s]) < hitR2) {
+          e.alive = false;
+          addKillLog(otherEnemy.name, e.name);
+          break;
+        }
+      }
+      if (!e.alive) break;
+    }
+    if (!e.alive) continue;
+
+    // ==========================================
+    // 高速化：距離の2乗による軽量当たり判定
+    // 敵の頭 vs プレイヤーの体：dist2 で sqrt を排除
+    // ==========================================
+    if (!isGodMode) {
+      const hitR2 = (e.radius + player.radius * 0.8) * (e.radius + player.radius * 0.8);
+      for (let j = 0; j < player.segs.length; j++) {
+        if (dist2(eHead, player.segs[j]) < hitR2) {
+          e.alive = false;
+          addKillLog("👑 あなた", e.name);
+          break;
+        }
+      }
+    }
+
+    // ==========================================
+    // 高速化：距離の2乗による軽量当たり判定
+    // プレイヤーの頭 vs 敵の体：dist2 で sqrt を排除
+    // ==========================================
+    if (e.alive && !isGodMode) {
+      const hitR2 = (player.radius + e.radius * 0.8) * (player.radius + e.radius * 0.8);
+      for (let j = 0; j < e.segs.length; j++) {
+        if (dist2(pHead, e.segs[j]) < hitR2) {
+          gameOver();
+          return;
+        }
+      }
+    }
+  }
+
+  // ──エサが減ったら補充してFOOD_COUNTを維持──
+  while (foods.length < FOOD_COUNT) foods.push(makeFood());
+
+  // ──UIの数値を更新──
+  scoreEl.textContent = player.score;
+  lenEl.textContent   = player.segs.length;
+
+  // ──カメラをプレイヤーの頭に滑らかに追従させる（線形補間）──
+  cam.x += (pHead.x - cam.x) * 0.1;
+  cam.y += (pHead.y - cam.y) * 0.1;
+
+  updateLeaderboard(); // リーダーボードを最新スコアで更新
+}
+
+// ──────────────────────────────────────────
+// render：canvas へのグラフィック描画
+// 背景 → グリッド → 壁枠 → エサ → 弾丸 → 敵 → プレイヤーの順で描く
+// ──────────────────────────────────────────
+function render() {
+  // 画面全体を暗い背景色でクリア
+  ctx.fillStyle = '#0b0d12'; 
+  ctx.fillRect(0, 0, W, H);
+
+  // ワールド左上がスクリーン上でどこにあるか（カメラオフセット）
+  const screenLeft = -cam.x + W / 2;
+  const screenTop = -cam.y + H / 2;
+
+  // ──六角形グリッドの描画（半透明の背景パターン）──
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.012)';
+  ctx.lineWidth = 1;
+  const hexRadius = 140; 
+  const hexHeight = hexRadius * Math.sqrt(3);
+  // 画面内に映っている列・行だけを計算して描画（パフォーマンス最適化）
+  const startCol = Math.max(0, Math.floor(-screenLeft / (hexRadius * 1.5)) - 1);
+  const endCol = Math.min(Math.ceil(WORLD_W / (hexRadius * 1.5)), Math.ceil((W - screenLeft) / (hexRadius * 1.5)) + 1);
+
+  for (let col = startCol; col <= endCol; col++) {
+    let cx = col * hexRadius * 1.5 + screenLeft;
+    const startRow = Math.max(0, Math.floor((-screenTop - (col % 2 === 1 ? hexHeight / 2 : 0)) / hexHeight) - 1);
+    const endRow = Math.min(Math.ceil(WORLD_H / hexHeight), Math.ceil((H - screenTop - (col % 2 === 1 ? hexHeight / 2 : 0)) / hexHeight) + 1);
+
+    for (let row = startRow; row <= endRow; row++) {
+      let cy = row * hexHeight + (col % 2 === 1 ? hexHeight / 2 : 0) + screenTop;
+      ctx.beginPath();
+      // ==========================================
+      // 高速化：六角形頂点オフセットのキャッシュ利用
+      // 毎フレーム cos/sin を呼ばず、起動時に計算済みの
+      // HEX_OFFSETS 定数配列を使って頂点座標を求める
+      // ==========================================
+      for (let i = 0; i < 6; i++) {
+        ctx.lineTo(cx + HEX_OFFSETS[i].ox, cy + HEX_OFFSETS[i].oy);
+      }
+      ctx.closePath(); ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  // ──ワールドの境界線（赤い枠）を描画──
+  ctx.strokeStyle = '#ff3838';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(screenLeft, screenTop, WORLD_W, WORLD_H);
+
+  // ==========================================
+  // 高速化：画面外カリング（描画スキップ）
+  // エサは画面外（マージン20px）なら arc/fill を呼ばずに即スキップ
+  // ==========================================
+  // ==========================================
+  // エサの描画：サイズに応じて見た目を3段階で差別化
+  // 小：シンプルな円 / 中：外枠リング付き / 大：二重リングでレア感を演出
+  // ==========================================
+  for (let i = 0; i < foods.length; i++) {
+    const f = foods[i];
+    const fx = f.x - cam.x + W / 2;
+    const fy = f.y - cam.y + H / 2;
+    if (fx < -20 || fx > W + 20 || fy < -20 || fy > H + 20) continue;
+
+    if (f.radius >= 10) {
+      // ── 大エサ：二重の光るリングでレア感を出す ──
+      // 一番外の薄いグロー輪
+      ctx.beginPath();
+      ctx.arc(fx, fy, f.radius * 2.0, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${f.hue}, 100%, 65%, 0.12)`;
+      ctx.fill();
+      // 中間リング
+      ctx.beginPath();
+      ctx.arc(fx, fy, f.radius * 1.45, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${f.hue}, 100%, 70%, 0.30)`;
+      ctx.fill();
+      // 本体（明るく白みがかった色）
+      ctx.beginPath();
+      ctx.arc(fx, fy, f.radius, 0, Math.PI * 2);
+      ctx.fillStyle = `hsl(${f.hue}, 100%, 80%)`;
+      ctx.fill();
+    } else if (f.radius >= 6) {
+      // ── 中エサ：薄いグロー輪 + 本体 ──
+      ctx.beginPath();
+      ctx.arc(fx, fy, f.radius * 1.55, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${f.hue}, 100%, 65%, 0.20)`;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(fx, fy, f.radius, 0, Math.PI * 2);
+      ctx.fillStyle = `hsl(${f.hue}, 100%, 72%)`;
+      ctx.fill();
+    } else {
+      // ── 小エサ：シンプルな円 ──
+      ctx.beginPath();
+      ctx.arc(fx, fy, f.radius, 0, Math.PI * 2);
+      ctx.fillStyle = `hsl(${f.hue}, 100%, 65%)`;
+      ctx.fill();
+    }
+  }
+
+  // ==========================================
+  // 高速化：shadowBlur 廃止→二重円で軽量グロー代替
+  // shadowBlur は GPU 負荷が高いため、外側に薄い大円を重ねる手法に変更
+  // ==========================================
+  for (let i = 0; i < bullets.length; i++) {
+    const b = bullets[i];
+    const bx = b.x - cam.x + W / 2;
+    const by = b.y - cam.y + H / 2;
+    if (bx < -20 || bx > W + 20 || by < -20 || by > H + 20) continue;
+    // 外側の薄い大円（グロー代替）
+    ctx.beginPath();
+    ctx.arc(bx, by, b.radius * 2.2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 255, 255, 0.18)';
+    ctx.fill();
+    // 内側の本体（明るいシアン）
+    ctx.beginPath();
+    ctx.arc(bx, by, b.radius, 0, Math.PI * 2);
+    ctx.fillStyle = '#00ffff';
+    ctx.fill();
+  }
+
+  // ──敵AIをすべて描画→プレイヤーを最前面に描画──
+  for (let i = 0; i < enemies.length; i++) enemies[i].draw(cam.x, cam.y);
+  player.draw(cam.x, cam.y);
+}
+
+// ==========================================
+// 高速化：updateLeaderboard の間引き実行
+// 毎フレーム DOM を書き換えると重いため 3 フレームに 1 回だけ更新する
+// ==========================================
+let _lbFrame = 0;
+// ──────────────────────────────────────────
+// リーダーボード更新：プレイヤー＋生存中の敵を合わせてスコア降順でソートし上位5名を表示
+// ──────────────────────────────────────────
+function updateLeaderboard() {
+  // 3フレームに1回だけ DOM を更新（毎フレーム更新の描画コストを削減）
+  _lbFrame++;
+  if (_lbFrame % 3 !== 0) return;
+  const listEl = document.getElementById('leaderboard-list');
+  if (!listEl) return;
+  // プレイヤーと生存中の全敵のスコアを1つの配列にまとめる
+  let all = [{ name: '👑 あなた', score: player.score, isPlayer: true }];
+  enemies.forEach(e => { if (e.alive) all.push({ name: e.name, score: e.score, isPlayer: false }); });
+  all.sort((a, b) => b.score - a.score); // 高スコア順にソート
+  
+  let html = '';
+  all.slice(0, 5).forEach((r, idx) => {
+    let displayName = r.name;
+    if (idx === 0) {
+      // 1位は王冠アイコンを付ける
+      displayName = r.isPlayer ? '👑 あなた' : `👑 ${r.name}`;
+    } else if (r.isPlayer) {
+      displayName = '👑 あなた';
+    }
+    
+    // プレイヤーはシアン色・太字で強調
+    html += `<div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: ${r.isPlayer ? '#00ffcc' : '#fff'}; font-weight: ${r.isPlayer ? 'bold' : 'normal'};">
+      <span>${idx + 1}. ${displayName}</span><span>${r.score} 点</span>
+    </div>`;
+  });
+  listEl.innerHTML = html;
+}
+
+// ──────────────────────────────────────────
+// ゲームオーバー処理：ループを止めてリザルト画面を表示する
+// ──────────────────────────────────────────
+function gameOver() {
+  running = false;
+  currentEvent = 'none';
+  eventAlertEl.style.display = 'none';
+  cancelAnimationFrame(animId); // アニメーションを停止
+  
+  ot.textContent = 'ゲームオーバー';
+  om.innerHTML = '※Pキーを押すとプレイ中でもタイトル画面に戻れます。';
+  
+  // スコアと長さを大きく表示
+  result.style.display = 'block';
+  result.textContent = `点数: ${player.score} (長さ: ${player.segs.length})`;
+  
+  btnPlay.textContent = 'もう一度プレイ';
+  btnMenu.style.display = 'inline-block'; // タイトルに戻るボタンを表示
+  
+  // ゲームオーバー時は設定セレクターを非表示にする
+  document.getElementById('chaos-area').style.display = 'none';
+  document.getElementById('skin-area').style.display = 'none';
+  document.getElementById('accessory-area').style.display = 'none';
+  
+  overlay.classList.remove('hidden'); // リザルト画面を表示
+}
+
+// ──────────────────────────────────────────
+// ボタンのイベントリスナー登録
+// ──────────────────────────────────────────
+
+// スタート／もう一度プレイ ボタン
+btnPlay.addEventListener('click', init);
+
+// タイトルに戻るボタン：タイトル画面の表示をリセット
+btnMenu.addEventListener('click', () => {
+  ot.textContent = 'SLITHERIA';
+  om.innerHTML = 'マウス or WASD/矢印キーで操作 / クリックでブースト<br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span>';
+  result.style.display = 'none';
+  btnPlay.textContent = 'スタート';
+  btnMenu.style.display = 'none';
+  
+  // 設定セレクターを再表示
+  document.getElementById('chaos-area').style.display = 'block';
+  document.getElementById('skin-area').style.display = 'block';
+  document.getElementById('accessory-area').style.display = 'block';
+});
+
+// ──────────────────────────────────────────
+// スキン・アクセサリーの選択処理
+// クリックされた番号を保存して選択中の見た目を切り替える
+// ──────────────────────────────────────────
+
+// スキン選択：押した丸ボタンに active クラスを付け他を外す
+window.selectSkin = function(index) {
+  playerSelectedSkinIndex = index;
+  const opts = document.querySelectorAll('#skin-area .opt-circle');
+  opts.forEach(o => o.classList.remove('active'));
+  if (opts[index]) opts[index].classList.add('active');
+};
+
+// アクセサリー選択：押した丸ボタンに active クラスを付け他を外す
+window.selectAcc = function(index) {
+  playerSelectedAccIndex = index;
+  const opts = document.querySelectorAll('#acc-selector .opt-circle');
+  opts.forEach(o => o.classList.remove('active'));
+  if (opts[index]) opts[index].classList.add('active');
+};
+</script>
+</body>
+</html>

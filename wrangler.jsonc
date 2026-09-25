@@ -1,0 +1,12 @@
+{
+  // Cloudflare Workers の設定ファイル
+  "name": "git-push-guide",        // Workers のプロジェクト名（リポジトリ名と同じ）
+  "main": "index.js",              // エントリーポイント
+  "compatibility_date": "2024-09-25", // Workers ランタイムの互換日
+  "compatibility_flags": ["nodejs_compat"], // Node.js 互換フラグ
+
+  // ── HTMLファイルをテキストとして静的バンドルする設定 ──
+  "rules": [
+    { "type": "Text", "globs": ["**/*.html"], "fallthrough": false }
+  ]
+}
