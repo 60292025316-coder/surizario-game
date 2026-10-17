@@ -359,9 +359,15 @@ let isShootMode = false;      // ショットモード（Qキーで弾を撃て�
 // カオスイベント管理変数
 // ──────────────────────────────────────────
 let isChaosModeGlobal = false; // タイトル画面でカオスモードをONにしたか
-let currentEvent = 'none';     // 現在発生中のイベント名（'reverse' / 'storm' / 'none'）
+let currentEvent = 'none';     // 現在発生中のイベント名
+let lastEvent = 'none';        // 直前のイベント名（連続防止用）
 let eventTimer = 0;            // 現在のイベントの残り時間（フレーム数）
 let nextEventTimer = 200;      // 次のイベントが起きるまでの待機フレーム数
+let windAngle = 0;             // 強風イベント：風の向き
+let warpTimer = 0;             // ワープイベント：次のワープまでのカウント
+
+// カオスイベント一覧
+const CHAOS_EVENTS = ['reverse','storm','speed','warp','mega','wind','vanish','rampage'];
 
 // ──────────────────────────────────────────
 // ゲームオブジェクトと状態管理の変数
@@ -688,8 +694,15 @@ class Worm {
     }
 
     // ──頭を進行方向に1フレーム分移動させる──
-    this.segs[0].x += Math.cos(this.angle) * currentSpeed;
-    this.segs[0].y += Math.sin(this.angle) * currentSpeed;
+    let moveSpeed = currentSpeed;
+    if (currentEvent === 'speed') moveSpeed *= 2; // 超加速
+    this.segs[0].x += Math.cos(this.angle) * moveSpeed;
+    this.segs[0].y += Math.sin(this.angle) * moveSpeed;
+    // 強風：プレイヤーのみ風向きに流す
+    if (this.isPlayer && currentEvent === 'wind') {
+      this.segs[0].x += Math.cos(windAngle) * 1.5;
+      this.segs[0].y += Math.sin(windAngle) * 1.5;
+    }
 
     // ==========================================
     // 高速化：距離の2乗による軽量当たり判定
@@ -1056,8 +1069,11 @@ function init() {
 
   // カオスイベントをリセット
   currentEvent = 'none';
+  lastEvent = 'none';
   eventTimer = 0;
-  nextEventTimer = rand(300, 500);
+  nextEventTimer = 600; // 最初のイベントまで10秒
+  windAngle = 0;
+  warpTimer = 0;
   eventAlertEl.style.display = 'none';
   killLogContainer.innerHTML = '';
   _lbFrame = 0; // リーダーボード間引きカウンターをリセット（オーバーフロー防止）
@@ -1088,25 +1104,61 @@ function update() {
     if (currentEvent === 'none') {
       nextEventTimer--;
       if (nextEventTimer <= 0) {
-        // 次のイベントをランダムで選択（50%で反転、50%で嵐）
-        currentEvent = Math.random() < 0.5 ? 'reverse' : 'storm';
-        eventTimer = rand(240, 400); // イベントの継続時間
-        
+        // ランダムでイベントを選択（直前と同じイベントは選ばない）
+        let nextEvent;
+        do {
+          nextEvent = CHAOS_EVENTS[Math.floor(Math.random() * CHAOS_EVENTS.length)];
+        } while (nextEvent === lastEvent);
+        currentEvent = nextEvent;
+        eventTimer = 300; // 5秒（60FPS×5）
+
+        // イベントごとの初期化
+        if (currentEvent === 'wind') windAngle = Math.random() * Math.PI * 2;
+        if (currentEvent === 'warp') warpTimer = 120;
+
+        // 警告バナーの表示
         eventAlertEl.style.display = 'block';
-        if (currentEvent === 'reverse') {
-          eventAlertEl.style.background = 'rgba(235, 94, 40, 0.9)';
-          eventAlertEl.textContent = '🚨 警告：重力反転中！ (操作が180度逆になります)';
-        } else {
-          eventAlertEl.style.background = 'rgba(155, 89, 182, 0.9)';
-          eventAlertEl.textContent = '🚨 警告：磁気嵐発生中！ (エサが超狂暴化して暴走移動)';
+        const CHAOS_INFO = {
+          reverse: { bg: 'rgba(235,94,40,0.9)',   text: '🚨 警告：操作反転中！ (180度逆になります)' },
+          storm:   { bg: 'rgba(155,89,182,0.9)',   text: '🚨 警告：磁気嵐発生中！ (エサが暴走移動)' },
+          dark:    { bg: 'rgba(10,10,10,0.95)',     text: '🌑 (削除済み)' },
+          speed:   { bg: 'rgba(230,126,34,0.9)',   text: '⚡ 超加速発生！ (全員2倍速になります)' },
+          warp:    { bg: 'rgba(52,152,219,0.9)',   text: '🔀 ワープ嵐！ (プレイヤーが飛ばされます)' },
+          mega:    { bg: 'rgba(46,213,115,0.9)',   text: '🍄 巨大化ラッシュ！ (エサが3倍効果)' },
+          wind:    { bg: 'rgba(26,188,156,0.9)',   text: '💨 強風発生！ (プレイヤーが流されます)' },
+          vanish:  { bg: 'rgba(231,76,60,0.9)',    text: '🎯 エサ消滅！ (フィールドのエサが半減)' },
+          rampage: { bg: 'rgba(192,57,43,0.9)',    text: '🔁 AI暴走！ (敵が全員突進してきます)' },
+        };
+        const info = CHAOS_INFO[currentEvent];
+        eventAlertEl.style.background = info.bg;
+        eventAlertEl.textContent = info.text;
+
+        // vanish：エサを半分削除
+        if (currentEvent === 'vanish' && foods) {
+          foods.splice(0, Math.floor(foods.length / 2));
         }
       }
     } else {
       // イベントのカウントダウン、0になったら終了
       eventTimer--;
-      if (eventTimer <= 0) { 
+
+      // ワープイベント：一定間隔でプレイヤーをランダム位置へ飛ばす
+      if (currentEvent === 'warp' && player && player.alive) {
+        warpTimer--;
+        if (warpTimer <= 0) {
+          const wx = rand(200, WORLD_W - 200);
+          const wy = rand(200, WORLD_H - 200);
+          const dx = wx - player.segs[0].x;
+          const dy = wy - player.segs[0].y;
+          player.segs.forEach(s => { s.x += dx; s.y += dy; });
+          warpTimer = 120; // 2秒ごとにワープ
+        }
+      }
+
+      if (eventTimer <= 0) {
+        lastEvent = currentEvent; // 直前のイベントを記録
         currentEvent = 'none';
-        nextEventTimer = rand(600, 1000); // 次のイベントまでの待機時間を長めに
+        nextEventTimer = 600; // 次のイベントまで10秒（60FPS×10）
         eventAlertEl.style.display = 'none';
       }
     }
@@ -1167,9 +1219,9 @@ function update() {
     // ==========================================
     if (dist2(pHead, f) < (player.radius + f.radius) * (player.radius + f.radius)) {
       player.score += Math.floor(f.radius * 1.4); // エサのサイズに応じてスコア加算
-      // エサのサイズに比例してヘビを伸ばす
-      // 小(r<6)→1マス / 中(r<10)→2マス / 大(r≥10)→4マス
-      const grow = f.radius >= 10 ? 4 : f.radius >= 6 ? 2 : 1;
+      // エサのサイズに比例してヘビを伸ばす（megaイベント中は3倍）
+      const baseGrow = f.radius >= 10 ? 4 : f.radius >= 6 ? 2 : 1;
+      const grow = currentEvent === 'mega' ? baseGrow * 3 : baseGrow;
       player.addSegment(grow);
       foods.splice(i, 1); // 食べたエサを削除
     }
@@ -1450,6 +1502,10 @@ function update() {
       if (currentEvent === 'reverse') {
         e.targetAngle += Math.PI;
       }
+      // AI暴走：プレイヤーの頭に向かって突進
+      if (currentEvent === 'rampage' && player && player.alive) {
+        e.targetAngle = Math.atan2(player.segs[0].y - eHead.y, player.segs[0].x - eHead.x);
+      }
     } // aiTimer ブロック終わり
 
     // ==========================================
@@ -1476,6 +1532,8 @@ function update() {
       else if (e.aiLevel === 'medium') e.speed = 2.2;
       else                             e.speed = 1.9;
     }
+    // 超加速・AI暴走イベント中は敵も2倍速
+    if (currentEvent === 'speed' || currentEvent === 'rampage') e.speed *= 2;
 
     e.update();
     const eHead = e.segs[0]; // 衝突判定に使うヘッド座標（update後に取得）
@@ -1558,8 +1616,6 @@ function update() {
   // ──カメラをプレイヤーの頭に滑らかに追従させる（線形補間）──
   cam.x += (pHead.x - cam.x) * 0.1;
   cam.y += (pHead.y - cam.y) * 0.1;
-
-  updateLeaderboard(); // リーダーボードを最新スコアで更新
 }
 
 // ──────────────────────────────────────────
@@ -1685,6 +1741,8 @@ function render() {
   // ──敵AIをすべて描画→プレイヤーを最前面に描画──
   for (let i = 0; i < enemies.length; i++) enemies[i].draw(cam.x, cam.y);
   player.draw(cam.x, cam.y);
+
+  updateLeaderboard();
 }
 
 // ==========================================
