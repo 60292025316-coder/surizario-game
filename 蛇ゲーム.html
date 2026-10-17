@@ -100,14 +100,17 @@
   #overlay.hidden { opacity: 0; visibility: hidden; }
   
   /* タイトルロゴ「SLITHERIA」のグラデーション文字 */
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@900&display=swap');
   #overlay h1 {
-    font-size: 70px; font-weight: 900; letter-spacing: -1px;
+    font-family: 'Orbitron', 'Helvetica Neue', sans-serif;
+    font-size: 68px; font-weight: 900; letter-spacing: 6px;
     background: linear-gradient(135deg, #00ffcc 0%, #0077ff 50%, #ff007f 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-   background-clip: text;
--webkit-background-clip: text;
--webkit-text-fill-color: transparent;
-    margin-bottom: 2px; filter: drop-shadow(0 4px 20px rgba(0,255,200,0.4));
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 2px; filter: drop-shadow(0 4px 24px rgba(0,255,200,0.5));
+    text-shadow: none;
   }
   /* 操作説明文 */
   #overlay p { font-size: 13px; color: #7f8c9d; max-width: 500px; text-align: center; line-height: 1.5; }
@@ -209,7 +212,7 @@
   <!-- タイトルロゴ／ゲームオーバー時は「ゲームオーバー」に変わる -->
   <h1 id="ot">SLITHERIA</h1>
   <!-- 操作説明文／ゲームオーバー時はリザルトメッセージに変わる -->
-  <p id="om">マウス or WASD/矢印キーで操作 / クリックでブースト / <span style="color:#ff9f43; font-weight:bold;">Pキーで中断してタイトルに戻る</span><br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span></p>
+  <p id="om">マウス or WASD/矢印キーで操作 / クリックでブースト / Pキーで中断してタイトルに戻る<br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span></p>
   
   <!-- ゲームオーバー時のスコア結果表示（通常は非表示） -->
   <div class="result" id="result"></div>
@@ -224,7 +227,7 @@
 
   <!-- スキン（ヘビの色）選択：12種類の丸いボタン -->
   <div class="selector-section" id="skin-area">
-    <label>🎨 スキン（カラーバリエーション）を選ぶ：</label>
+    <label>🎨 スキンを選ぶ：</label>
     <div class="selector-grid">
       <div class="opt-circle active" onclick="selectSkin(0)" style="background: radial-gradient(circle, #ff4757, #ff6b81);" title="ルビーレッド"></div>
       <div class="opt-circle" onclick="selectSkin(1)" style="background: radial-gradient(circle, #1e90ff, #3742fa);" title="サファイアブルー"></div>
@@ -243,7 +246,7 @@
 
   <!-- アクセサリー（頭の装飾品）選択：なし＋5種類 -->
   <div class="selector-section" id="accessory-area">
-    <label>👑 装備（頭の装飾品）を選択</label>
+    <label>👑 装備を選択</label>
     <div class="selector-grid" id="acc-selector">
       <div class="opt-circle active" onclick="selectAcc(0)">❌</div>
       <div class="opt-circle" onclick="selectAcc(1)"  title="王冠">👑</div>
@@ -251,7 +254,7 @@
       <div class="opt-circle" onclick="selectAcc(3)"  title="天使の輪">😇</div>
       <div class="opt-circle" onclick="selectAcc(4)"  title="猫耳">🐱</div>
       <div class="opt-circle" onclick="selectAcc(5)"  title="リボン">🎀</div>
-      <div class="opt-circle" onclick="selectAcc(6)"  title="サンタ帽">🎅</div>
+      <div class="opt-circle" onclick="selectAcc(6)"  title="サンタ">🎅</div>
       <div class="opt-circle" onclick="selectAcc(7)"  title="卒業帽">🎓</div>
       <div class="opt-circle" onclick="selectAcc(8)"  title="カウボーイハット">🤠</div>
       <div class="opt-circle" onclick="selectAcc(9)"  title="悪魔の角">😈</div>
@@ -472,7 +475,7 @@ function backToTitleDirectly() {
   eventAlertEl.style.display = 'none';
   cancelAnimationFrame(animId); // アニメーションループを停止
   ot.textContent = 'SLITHERIA';
-  om.innerHTML = 'マウス or WASD/矢印キーで操作 / クリックでブースト / <span style="color:#ff9f43; font-weight:bold;">Pキーで中断してタイトルに戻る</span><br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span>';
+  om.innerHTML = 'マウス or WASD/矢印キーで操作 / クリックでブースト / Pキーで中断してタイトルに戻る<br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span>';
   result.style.display = 'none';
   btnPlay.textContent = 'スタート';
   btnMenu.style.display = 'none';
@@ -818,38 +821,47 @@ class Worm {
       // 進行方向の回転をかけず、頭の中心に大きめで直接描画する。
       // 耳・帽子系は頭の上端に揃え、顔全体を覆う系は中心に重ねる。
       // ==========================================
-      const FACE_ITEMS = new Set([3, 4, 8, 9, 12, 13, 14, 15]);
+      // 6(サンタ)は顔ごと重ねる系に変更
+      const FACE_ITEMS = new Set([3, 4, 6, 8, 9, 12, 13, 14, 15]);
+
+      // 絵文字の描画基準を常に中央に統一
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
 
       if (FACE_ITEMS.has(idx)) {
         // ── 顔重ね描画：回転なし、頭の中心基準 ──
         // フォントをヘビの直径に近いサイズにして顔を覆う
-        const faceSize = Math.floor(this.radius * 2.2);
-        ctx.font = `bold ${faceSize}px sans-serif`;
+        const faceSize = Math.floor(this.radius * 2.4);
+        ctx.font = `${faceSize}px sans-serif`;
 
         // アイテムごとの縦オフセット（頭の中心からのズレ）
         let faceOffsetY = 0;
         switch (idx) {
-          case 3:  faceOffsetY = -this.radius * 0.3; break; // 天使の輪：頭に重ねて輪が上に出る
-          case 4:  faceOffsetY = -this.radius * 0.5; break; // 猫耳：少し上（耳が頭上に出る）
-          case 8:  faceOffsetY = -this.radius * 0.3; break; // カウボーイ：ツバが顔に被る
-          case 9:  faceOffsetY = -this.radius * 0.4; break; // 悪魔の角：額上に角が出る
+          case 3:  faceOffsetY = -this.radius * 0.2; break; // 天使の輪：頭に重ねて輪が上に出る
+          case 4:  faceOffsetY = -this.radius * 0.3; break; // 猫耳：少し上（耳が頭上に出る）
+          case 6:  faceOffsetY =  0;                 break; // サンタ：顔ごと完全に重ねる
+          case 8:  faceOffsetY = -this.radius * 0.2; break; // カウボーイ：ツバが顔に被る
+          case 9:  faceOffsetY = -this.radius * 0.2; break; // 悪魔の角：額上に角が出る
           case 12: faceOffsetY =  0;                 break; // ドクロ：顔に完全に重ねる
-          case 13: faceOffsetY = -this.radius * 0.5; break; // うさ耳：上に飛び出す
-          case 14: faceOffsetY = -this.radius * 0.4; break; // キツネ耳：上寄り
+          case 13: faceOffsetY = -this.radius * 0.3; break; // うさ耳：上に飛び出す
+          case 14: faceOffsetY = -this.radius * 0.2; break; // キツネ耳：上寄り
           case 15: faceOffsetY =  0;                 break; // 宇宙人：顔に完全に重ねる
         }
         ctx.fillText(itemEmoji, hx, hy + faceOffsetY);
 
       } else {
-        // ── 頭上装着系：進行方向に合わせて回転し、頭の上に載せる ──
-        ctx.font = `bold ${Math.floor(this.radius * 1.8)}px sans-serif`;
+        // ── 頭上装着系：進行方向に合わせて回転し、頭の真上に載せる ──
+        ctx.font = `${Math.floor(this.radius * 2.0)}px sans-serif`;
         ctx.translate(hx, hy); ctx.rotate(this.angle + Math.PI / 2);
 
-        let offsetY = -this.radius * 1.2; // デフォルト：頭上
+        let offsetY = -this.radius * 1.5; // デフォルト：頭の真上（目と重ならない距離）
         switch (idx) {
-          case 5:  offsetY =  this.radius * 0.8; break; // リボン：顎のあたり
-          case 10: offsetY = -this.radius * 1.0; break; // 炎：頭に密着
-          case 11: offsetY = -this.radius * 1.2; break; // 星：頭上
+          case 1:  offsetY = -this.radius * 1.5; break; // 王冠：頭上
+          case 2:  offsetY = -this.radius * 1.5; break; // 魔女の帽子：頭上
+          case 5:  offsetY = -this.radius * 1.5; break; // リボン：頭上
+          case 7:  offsetY = -this.radius * 1.5; break; // 卒業帽：頭上
+          case 10: offsetY = -this.radius * 1.4; break; // 炎：頭上
+          case 11: offsetY = -this.radius * 1.6; break; // 星：頭上
         }
         ctx.fillText(itemEmoji, 0, offsetY);
       }
@@ -1749,7 +1761,7 @@ btnPlay.addEventListener('click', init);
 // タイトルに戻るボタン：タイトル画面の表示をリセット
 btnMenu.addEventListener('click', () => {
   ot.textContent = 'SLITHERIA';
-  om.innerHTML = 'マウス or WASD/矢印キーで操作 / クリックでブースト / <span style="color:#ff9f43; font-weight:bold;">Pキーで中断してタイトルに戻る</span><br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span>';
+  om.innerHTML = 'マウス or WASD/矢印キーで操作 / クリックでブースト / Pキーで中断してタイトルに戻る<br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span>';
   result.style.display = 'none';
   btnPlay.textContent = 'スタート';
   btnMenu.style.display = 'none';
