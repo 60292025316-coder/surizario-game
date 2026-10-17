@@ -209,7 +209,7 @@
   <!-- タイトルロゴ／ゲームオーバー時は「ゲームオーバー」に変わる -->
   <h1 id="ot">SLITHERIA</h1>
   <!-- 操作説明文／ゲームオーバー時はリザルトメッセージに変わる -->
-  <p id="om">マウス or WASD/矢印キーで操作 / クリックでブースト<br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span></p>
+  <p id="om">マウス or WASD/矢印キーで操作 / クリックでブースト / <span style="color:#ff9f43; font-weight:bold;">Pキーで中断してタイトルに戻る</span><br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span></p>
   
   <!-- ゲームオーバー時のスコア結果表示（通常は非表示） -->
   <div class="result" id="result"></div>
@@ -472,7 +472,7 @@ function backToTitleDirectly() {
   eventAlertEl.style.display = 'none';
   cancelAnimationFrame(animId); // アニメーションループを停止
   ot.textContent = 'SLITHERIA';
-  om.innerHTML = 'マウス or WASD/矢印キーで操作 / クリックでブースト<br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span>';
+  om.innerHTML = 'マウス or WASD/矢印キーで操作 / クリックでブースト / <span style="color:#ff9f43; font-weight:bold;">Pキーで中断してタイトルに戻る</span><br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span>';
   result.style.display = 'none';
   btnPlay.textContent = 'スタート';
   btnMenu.style.display = 'none';
@@ -1749,7 +1749,7 @@ btnPlay.addEventListener('click', init);
 // タイトルに戻るボタン：タイトル画面の表示をリセット
 btnMenu.addEventListener('click', () => {
   ot.textContent = 'SLITHERIA';
-  om.innerHTML = 'マウス or WASD/矢印キーで操作 / クリックでブースト<br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span>';
+  om.innerHTML = 'マウス or WASD/矢印キーで操作 / クリックでブースト / <span style="color:#ff9f43; font-weight:bold;">Pキーで中断してタイトルに戻る</span><br><span style="color:#00ffcc; font-weight:bold;">※タイトル画面で「C」キーを押すと、管理者メニューを開けます。</span>';
   result.style.display = 'none';
   btnPlay.textContent = 'スタート';
   btnMenu.style.display = 'none';
