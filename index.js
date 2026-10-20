@@ -1,7 +1,7 @@
 // Cloudflare Workers エントリーポイント
 // / へのリクエストに 蛇ゲーム.html の内容を返す
 
-import html from './index.html';
+import html from './snake-game.html';
 
 export default {
   fetch(request) {
